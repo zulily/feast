@@ -1,0 +1,403 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>feast.sdk.utils.bq_util &#8212; feast 0.1.2 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../../_static/language_data.js"></script>
+    <link rel="shortcut icon" href="../../../../_static/favicon.png"/>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for feast.sdk.utils.bq_util</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright 2018 The Feast Authors</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     https://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Helper function to interact with BigQuery</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="k">import</span> <span class="n">datetime</span>
+
+<span class="kn">import</span> <span class="nn">fastavro</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">pytz</span>
+<span class="kn">from</span> <span class="nn">google.cloud</span> <span class="k">import</span> <span class="n">bigquery</span><span class="p">,</span> <span class="n">bigquery_storage_v1beta1</span>
+<span class="kn">from</span> <span class="nn">google.cloud</span> <span class="k">import</span> <span class="n">storage</span>
+<span class="kn">from</span> <span class="nn">google.cloud.bigquery.client</span> <span class="k">import</span> <span class="n">Client</span> <span class="k">as</span> <span class="n">BQClient</span>
+<span class="kn">from</span> <span class="nn">google.cloud.bigquery.job</span> <span class="k">import</span> <span class="n">ExtractJobConfig</span><span class="p">,</span> <span class="n">DestinationFormat</span>
+<span class="kn">from</span> <span class="nn">google.cloud.bigquery.table</span> <span class="k">import</span> <span class="n">Table</span>
+<span class="kn">from</span> <span class="nn">google.cloud.exceptions</span> <span class="k">import</span> <span class="n">NotFound</span>
+<span class="kn">from</span> <span class="nn">google.cloud.storage</span> <span class="k">import</span> <span class="n">Client</span> <span class="k">as</span> <span class="n">GCSClient</span>
+
+<span class="kn">from</span> <span class="nn">feast.sdk.resources.feature_set</span> <span class="k">import</span> <span class="n">FileType</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.utils.gs_utils</span> <span class="k">import</span> <span class="n">is_gs_path</span><span class="p">,</span> <span class="n">split_gs_path</span><span class="p">,</span> <span class="n">gcs_to_df</span>
+
+
+<div class="viewcode-block" id="head"><a class="viewcode-back" href="../../../../_autosummary/feast.sdk.utils.bq_util.html#feast.sdk.utils.bq_util.head">[docs]</a><span class="k">def</span> <span class="nf">head</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">max_rows</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get the head of the table. Retrieves rows from the given table at </span>
+<span class="sd">        minimum cost</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        client (google.cloud.bigquery.client.Client): bigquery client</span>
+<span class="sd">        table (google.cloud.bigquery.table.Table): bigquery table to get the </span>
+<span class="sd">            head of</span>
+<span class="sd">        max_rows (int, optional): Defaults to 10. maximum number of rows to </span>
+<span class="sd">            retrieve</span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        pandas.DataFrame: dataframe containing the head of rows</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_rows</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">max_results</span><span class="o">=</span><span class="n">max_rows</span><span class="p">)</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+        <span class="n">data</span><span class="o">=</span><span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">],</span> <span class="n">columns</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="get_table_name"><a class="viewcode-back" href="../../../../_autosummary/feast.sdk.utils.bq_util.html#feast.sdk.utils.bq_util.get_table_name">[docs]</a><span class="k">def</span> <span class="nf">get_table_name</span><span class="p">(</span><span class="n">feature_id</span><span class="p">,</span> <span class="n">storage_spec</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get fully qualified BigQuery table name from a feature ID and its</span>
+<span class="sd">    storage spec</span>
+<span class="sd">    Args:</span>
+<span class="sd">        feature_id(str): ID of a feature</span>
+<span class="sd">        storage_spec(feast.specs.StorageSpec_pb2.StorageSpec): storage spec of</span>
+<span class="sd">        the feature</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">         str: fully qualified table name of the feature.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;bigquery&quot;</span> <span class="o">!=</span> <span class="n">storage_spec</span><span class="o">.</span><span class="n">type</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;storage spec is not BigQuery storage spec&quot;</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">project</span> <span class="o">=</span> <span class="n">storage_spec</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;project&quot;</span><span class="p">]</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">storage_spec</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;dataset&quot;</span><span class="p">]</span>
+    <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;storage spec has empty project or dataset option&quot;</span><span class="p">)</span>
+
+    <span class="n">table_name</span> <span class="o">=</span> <span class="n">feature_id</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="s2">&quot;.&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">project</span><span class="p">,</span> <span class="n">dataset</span><span class="p">,</span> <span class="n">table_name</span><span class="p">])</span></div>
+
+
+<span class="k">def</span> <span class="nf">get_default_templocation</span><span class="p">(</span><span class="n">bigquery_client</span><span class="p">,</span> <span class="n">project</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">project</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">project</span> <span class="o">=</span> <span class="n">bigquery_client</span><span class="o">.</span><span class="n">project</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">project</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+    <span class="n">storage_client</span> <span class="o">=</span> <span class="n">storage</span><span class="o">.</span><span class="n">Client</span><span class="p">()</span>
+    <span class="n">default_bucket_name</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;feast-templocation-</span><span class="si">{project}</span><span class="s2">&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">storage_client</span><span class="o">.</span><span class="n">get_bucket</span><span class="p">(</span><span class="n">default_bucket_name</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">NotFound</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="n">f</span><span class="s1">&#39;Default bucket &quot;</span><span class="si">{default_bucket_name}</span><span class="s1">&quot; not found. Attempting to create it.&#39;</span>
+        <span class="p">)</span>
+        <span class="n">storage_client</span><span class="o">.</span><span class="n">create_bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="o">=</span><span class="n">default_bucket_name</span><span class="p">,</span> <span class="n">project</span><span class="o">=</span><span class="n">project</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">f</span><span class="s2">&quot;gs://</span><span class="si">{default_bucket_name}</span><span class="s2">&quot;</span>
+
+
+<div class="viewcode-block" id="query_to_dataframe"><a class="viewcode-back" href="../../../../_autosummary/feast.sdk.utils.bq_util.html#feast.sdk.utils.bq_util.query_to_dataframe">[docs]</a><span class="k">def</span> <span class="nf">query_to_dataframe</span><span class="p">(</span>
+    <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">bigquery_client</span><span class="p">:</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">Client</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">storage_client</span><span class="p">:</span> <span class="n">storage</span><span class="o">.</span><span class="n">Client</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">project</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">templocation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run a query job on BigQuery and return the result in Pandas DataFrame format</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        query: BigQuery query e.g. &quot;SELECT * FROM dataset.table&quot;</span>
+<span class="sd">        bigquery_client:</span>
+<span class="sd">        storage_client:</span>
+<span class="sd">        project: Google Cloud project id</span>
+<span class="sd">        templocation: Google Cloud Storage location to store intermediate files, must start with &quot;gs://&quot;</span>
+
+<span class="sd">    Returns: Pandas DataFrame of the query result</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">templocation</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">templocation</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;gs://&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;templocation must start with &quot;gs://&quot;&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">bigquery_client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">bigquery_client</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">Client</span><span class="p">(</span><span class="n">project</span><span class="o">=</span><span class="n">project</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">project</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">project</span> <span class="o">=</span> <span class="n">bigquery_client</span><span class="o">.</span><span class="n">project</span>
+
+    <span class="n">query_job</span> <span class="o">=</span> <span class="n">bigquery_client</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">query</span><span class="p">,</span> <span class="n">project</span><span class="o">=</span><span class="n">project</span><span class="p">)</span>
+    <span class="n">query_job_state</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">query_job</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">query_job</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">query_job_state</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Query status: </span><span class="si">{query_job.state}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">query_job_state</span> <span class="o">=</span> <span class="n">query_job</span><span class="o">.</span><span class="n">state</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">query_job</span><span class="o">.</span><span class="n">state</span> <span class="o">!=</span> <span class="n">query_job_state</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Query status: </span><span class="si">{query_job.state}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">query_job</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="n">query_job</span><span class="o">.</span><span class="n">exception</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">templocation</span><span class="p">:</span>
+        <span class="n">templocation</span> <span class="o">=</span> <span class="n">get_default_templocation</span><span class="p">(</span><span class="n">bigquery_client</span><span class="p">,</span> <span class="n">project</span><span class="o">=</span><span class="n">project</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">templocation</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">):</span>
+        <span class="n">templocation</span> <span class="o">+=</span> <span class="n">templocation</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="n">destination_uri</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">f</span><span class="s2">&quot;</span><span class="si">{templocation}</span><span class="s2">/bq-{datetime.now(pytz.utc).strftime(&#39;%Y%m</span><span class="si">%d</span><span class="s2">T%H%M%SZ&#39;)}.avro&quot;</span>
+    <span class="p">)</span>
+    <span class="n">extract_job_config</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">job</span><span class="o">.</span><span class="n">ExtractJobConfig</span><span class="p">(</span><span class="n">destination_format</span><span class="o">=</span><span class="s2">&quot;AVRO&quot;</span><span class="p">)</span>
+    <span class="n">extract_job</span> <span class="o">=</span> <span class="n">bigquery_client</span><span class="o">.</span><span class="n">extract_table</span><span class="p">(</span>
+        <span class="n">query_job</span><span class="o">.</span><span class="n">destination</span><span class="p">,</span> <span class="n">destination_uri</span><span class="p">,</span> <span class="n">job_config</span><span class="o">=</span><span class="n">extract_job_config</span>
+    <span class="p">)</span>
+
+    <span class="k">while</span> <span class="ow">not</span> <span class="n">extract_job</span><span class="o">.</span><span class="n">done</span><span class="p">():</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">extract_job</span><span class="o">.</span><span class="n">exception</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="n">extract_job</span><span class="o">.</span><span class="n">exception</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">storage_client</span><span class="p">:</span>
+        <span class="n">storage_client</span> <span class="o">=</span> <span class="n">storage</span><span class="o">.</span><span class="n">Client</span><span class="p">(</span><span class="n">project</span><span class="o">=</span><span class="n">project</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Reading query result into DataFrame&quot;</span><span class="p">)</span>
+
+    <span class="n">bucket_name</span><span class="p">,</span> <span class="n">blob_name</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">destination_uri</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="mi">2</span><span class="p">],</span>
+        <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">destination_uri</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="mi">3</span><span class="p">:]),</span>
+    <span class="p">)</span>
+    <span class="n">bucket</span> <span class="o">=</span> <span class="n">storage_client</span><span class="o">.</span><span class="n">get_bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">)</span>
+    <span class="n">blob</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">get_blob</span><span class="p">(</span><span class="n">blob_name</span><span class="p">)</span>
+    <span class="n">downloaded_avro_filename</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">()</span><span class="o">.</span><span class="n">name</span>
+    <span class="n">blob</span><span class="o">.</span><span class="n">download_to_filename</span><span class="p">(</span><span class="n">downloaded_avro_filename</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">downloaded_avro_filename</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">avro_file</span><span class="p">:</span>
+        <span class="n">avro_reader</span> <span class="o">=</span> <span class="n">fastavro</span><span class="o">.</span><span class="n">reader</span><span class="p">(</span><span class="n">avro_file</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">.</span><span class="n">from_records</span><span class="p">(</span><span class="n">avro_reader</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">df</span></div>
+
+
+<div class="viewcode-block" id="TableDownloader"><a class="viewcode-back" href="../../../../_autosummary/feast.sdk.utils.bq_util.TableDownloader.html#feast.sdk.utils.bq_util.TableDownloader">[docs]</a><span class="k">class</span> <span class="nc">TableDownloader</span><span class="p">:</span>
+<div class="viewcode-block" id="TableDownloader.__init__"><a class="viewcode-back" href="../../../../_autosummary/feast.sdk.utils.bq_util.TableDownloader.html#feast.sdk.utils.bq_util.TableDownloader.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bqclient</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_storageclient</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bqstorageclient</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">storageclient</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storageclient</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_storageclient</span> <span class="o">=</span> <span class="n">GCSClient</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storageclient</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">bqclient</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bqclient</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_bqclient</span> <span class="o">=</span> <span class="n">BQClient</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bqclient</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">bqstorageclient</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bqstorageclient</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_bqstorageclient</span> <span class="o">=</span> <span class="n">bigquery_storage_v1beta1</span><span class="o">.</span><span class="n">BigQueryStorageClient</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bqstorageclient</span>
+
+<div class="viewcode-block" id="TableDownloader.download_table_as_file"><a class="viewcode-back" href="../../../../_autosummary/feast.sdk.utils.bq_util.TableDownloader.html#feast.sdk.utils.bq_util.TableDownloader.download_table_as_file">[docs]</a>    <span class="k">def</span> <span class="nf">download_table_as_file</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">full_table_id</span><span class="p">,</span> <span class="n">dest</span><span class="p">,</span> <span class="n">file_type</span><span class="p">,</span> <span class="n">staging_location</span><span class="o">=</span><span class="kc">None</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Download a bigquery table as file</span>
+<span class="sd">        Args:</span>
+<span class="sd">            full_table_id (str): fully qualified BigQuery table id</span>
+<span class="sd">            dest (str): destination filename</span>
+<span class="sd">            file_type (feast.sdk.resources.feature_set.FileType): (default:</span>
+<span class="sd">                FileType.CSV) exported file format</span>
+<span class="sd">            staging_location (str, optional): url to staging_location (currently</span>
+<span class="sd">                support a folder in GCS)</span>
+<span class="sd">        Returns: (str) path to the downloaded file</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">staging_location</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">download_table_as_df</span><span class="p">(</span><span class="n">full_table_id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">file_type</span> <span class="o">==</span> <span class="n">FileType</span><span class="o">.</span><span class="n">CSV</span><span class="p">:</span>
+                <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">dest</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">file_type</span> <span class="o">==</span> <span class="n">FileType</span><span class="o">.</span><span class="n">JSON</span><span class="p">:</span>
+                <span class="n">df</span><span class="o">.</span><span class="n">to_json</span><span class="p">(</span><span class="n">dest</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Only FileType: CSV and JSON are supported for download_table_as_file without staging location&quot;</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="n">dest</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_gs_path</span><span class="p">(</span><span class="n">staging_location</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;staging_uri must be a directory in GCS&quot;</span><span class="p">)</span>
+
+        <span class="n">temp_file_name</span> <span class="o">=</span> <span class="s2">&quot;temp_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)))</span>
+        <span class="n">staging_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">staging_location</span><span class="p">,</span> <span class="n">temp_file_name</span><span class="p">)</span>
+
+        <span class="n">job_config</span> <span class="o">=</span> <span class="n">ExtractJobConfig</span><span class="p">()</span>
+        <span class="n">job_config</span><span class="o">.</span><span class="n">destination_format</span> <span class="o">=</span> <span class="n">file_type</span>
+        <span class="n">src_table</span> <span class="o">=</span> <span class="n">Table</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="n">full_table_id</span><span class="p">)</span>
+        <span class="n">job</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bqclient</span><span class="o">.</span><span class="n">extract_table</span><span class="p">(</span>
+            <span class="n">src_table</span><span class="p">,</span> <span class="n">staging_file_path</span><span class="p">,</span> <span class="n">job_config</span><span class="o">=</span><span class="n">job_config</span>
+        <span class="p">)</span>
+
+        <span class="c1"># await completion</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+
+        <span class="n">bucket_name</span><span class="p">,</span> <span class="n">blob_name</span> <span class="o">=</span> <span class="n">split_gs_path</span><span class="p">(</span><span class="n">staging_file_path</span><span class="p">)</span>
+        <span class="n">bucket</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">storageclient</span><span class="o">.</span><span class="n">get_bucket</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">)</span>
+        <span class="n">blob</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">blob</span><span class="p">(</span><span class="n">blob_name</span><span class="p">)</span>
+        <span class="n">blob</span><span class="o">.</span><span class="n">download_to_filename</span><span class="p">(</span><span class="n">dest</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dest</span></div>
+
+<div class="viewcode-block" id="TableDownloader.download_table_as_df"><a class="viewcode-back" href="../../../../_autosummary/feast.sdk.utils.bq_util.TableDownloader.html#feast.sdk.utils.bq_util.TableDownloader.download_table_as_df">[docs]</a>    <span class="k">def</span> <span class="nf">download_table_as_df</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">full_table_id</span><span class="p">,</span> <span class="n">staging_location</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Download a BigQuery table as Pandas Dataframe</span>
+<span class="sd">        Args:</span>
+<span class="sd">            full_table_id (src) : fully qualified BigQuery table id</span>
+<span class="sd">            staging_location: url to staging_location (currently</span>
+<span class="sd">                support a folder in GCS)</span>
+
+<span class="sd">        Returns: pandas.DataFrame: dataframe of the training dataset</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">staging_location</span><span class="p">:</span>
+            <span class="n">table</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">TableReference</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="n">full_table_id</span><span class="p">)</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bqclient</span><span class="o">.</span><span class="n">list_rows</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">rows</span><span class="o">.</span><span class="n">to_dataframe</span><span class="p">(</span><span class="n">bqstorage_client</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bqstorageclient</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_gs_path</span><span class="p">(</span><span class="n">staging_location</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;staging_uri must be a directory in GCS&quot;</span><span class="p">)</span>
+
+        <span class="n">temp_file_name</span> <span class="o">=</span> <span class="s2">&quot;temp_</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)))</span>
+        <span class="n">staging_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">staging_location</span><span class="p">,</span> <span class="n">temp_file_name</span><span class="p">)</span>
+
+        <span class="n">job_config</span> <span class="o">=</span> <span class="n">ExtractJobConfig</span><span class="p">()</span>
+        <span class="n">job_config</span><span class="o">.</span><span class="n">destination_format</span> <span class="o">=</span> <span class="n">DestinationFormat</span><span class="o">.</span><span class="n">CSV</span>
+        <span class="n">job</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bqclient</span><span class="o">.</span><span class="n">extract_table</span><span class="p">(</span>
+            <span class="n">Table</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="n">full_table_id</span><span class="p">),</span> <span class="n">staging_file_path</span><span class="p">,</span> <span class="n">job_config</span><span class="o">=</span><span class="n">job_config</span>
+        <span class="p">)</span>
+
+        <span class="c1"># await completion</span>
+        <span class="n">job</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">gcs_to_df</span><span class="p">(</span><span class="n">staging_file_path</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">feast</a></h1>
+
+
+
+<p class="blurb">Feast Python SDK</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=gojek&repo=feast&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../README.html">Feast Python Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_reference.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Feast Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+    <a href="https://github.com/gojek/feast" class="github">
+        <img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"  class="github"/>
+    </a>
+    
+
+    
+  </body>
+</html>
