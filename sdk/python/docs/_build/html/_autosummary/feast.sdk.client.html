@@ -1,0 +1,352 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>feast.sdk.client &#8212; feast 0.1.2 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.png"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-feast.sdk.client">
+<span id="feast-sdk-client"></span><h1>feast.sdk.client<a class="headerlink" href="#module-feast.sdk.client" title="Permalink to this headline">¶</a></h1>
+<p class="rubric">Classes</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="feast.sdk.client.Client.html#feast.sdk.client.Client" title="feast.sdk.client.Client"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Client</span></code></a>([core_url,&nbsp;serving_url,&nbsp;verbose])</td>
+<td>Client for interacting with Feast Core an Serving</td>
+</tr>
+</tbody>
+</table>
+<dl class="class">
+<dt id="feast.sdk.client.Client">
+<em class="property">class </em><code class="descclassname">feast.sdk.client.</code><code class="descname">Client</code><span class="sig-paren">(</span><em>core_url=None</em>, <em>serving_url=None</em>, <em>verbose=False</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/client.html#Client"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client" title="Permalink to this definition">¶</a></dt>
+<dd><p>Client for interacting with Feast Core an Serving</p>
+<dl class="method">
+<dt id="feast.sdk.client.Client.apply">
+<code class="descname">apply</code><span class="sig-paren">(</span><em>obj</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/client.html#Client.apply"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client.apply" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create or update one or many feast’s resource (feature, entity, importer, storage).</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>obj</strong> (<em>object</em>) – one or many feast’s resource</li>
+<li><strong>create_entity</strong> (<em>//</em>) – (default: {None})</li>
+<li><strong>create_features</strong> (<em>//</em>) – [description] (default: {None})</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="feast.sdk.client.Client.close">
+<code class="descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/client.html#Client.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close underlying connection to Feast’s core and serving end points.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="feast.sdk.client.Client.core_url">
+<code class="descname">core_url</code><a class="headerlink" href="#feast.sdk.client.Client.core_url" title="Permalink to this definition">¶</a></dt>
+<dd><p>URL for accessing Feast Core service</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Core URL value</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">str</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="feast.sdk.client.Client.create_dataset">
+<code class="descname">create_dataset</code><span class="sig-paren">(</span><em>feature_set</em>, <em>start_date</em>, <em>end_date</em>, <em>limit=None</em>, <em>name_prefix=None</em>, <em>filters=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/client.html#Client.create_dataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client.create_dataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create training dataset for a feature set. The training dataset
+will be bounded by event timestamp between start_date and end_date.
+Specify limit to limit number of row returned. The training dataset
+will reside in a bigquery table specified by destination.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>feature_set</strong> (<a class="reference internal" href="feast.sdk.resources.feature_set.FeatureSet.html#feast.sdk.resources.feature_set.FeatureSet" title="feast.sdk.resources.feature_set.FeatureSet"><em>feast.sdk.resources.feature_set.FeatureSet</em></a>) – feature set representing the data wanted</li>
+<li><strong>start_date</strong> (<em>str</em>) – starting date of the training data in ISO 8601
+format (e.g.: “2018-12-31”)</li>
+<li><strong>end_date</strong> (<em>str</em>) – end date of training data in ISO 8601 format (e.g.:
+“2018-12-31”)</li>
+<li><strong>limit</strong> (<em>int</em><em>, </em><em>optional</em>) – (default: None) maximum number of row
+returned</li>
+<li><strong>name_prefix</strong> (<em>str</em><em>, </em><em>optional</em>) – (default: None) name prefix.</li>
+<li><strong>filters</strong> (<em>dict</em><em>, </em><em>optional</em>) – (default: None) conditional clause
+that will be used to filter dataset. Keys of filters could be
+feature id or job_id.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">job id of the import job</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">feast.resources.feature_set.DatasetInfo</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="feast.sdk.client.Client.download_dataset">
+<code class="descname">download_dataset</code><span class="sig-paren">(</span><em>dataset_info</em>, <em>dest</em>, <em>staging_location=None</em>, <em>file_type='CSV'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/client.html#Client.download_dataset"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client.download_dataset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download training dataset as file</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>dataset_info</strong> (<a class="reference internal" href="feast.sdk.resources.feature_set.DatasetInfo.html#feast.sdk.resources.feature_set.DatasetInfo" title="feast.sdk.resources.feature_set.DatasetInfo"><em>feast.sdk.resources.feature_set.DatasetInfo</em></a>) – dataset_info to be downloaded</li>
+<li><strong>dest</strong> (<em>str</em>) – destination’s file path</li>
+<li><strong>staging_location</strong> (<em>str</em><em>, </em><em>optional</em>) – url to staging_location (currently
+support a folder in GCS)</li>
+<li><strong>file_type</strong> (<a class="reference internal" href="feast.sdk.resources.feature_set.FileType.html#feast.sdk.resources.feature_set.FileType" title="feast.sdk.resources.feature_set.FileType"><em>feast.sdk.resources.feature_set.FileType</em></a>) – Exported file format. Defaults to FileType.CSV</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">path to the downloaded file</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">str</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="feast.sdk.client.Client.download_dataset_to_df">
+<code class="descname">download_dataset_to_df</code><span class="sig-paren">(</span><em>dataset_info</em>, <em>staging_location=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/client.html#Client.download_dataset_to_df"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client.download_dataset_to_df" title="Permalink to this definition">¶</a></dt>
+<dd><p>Download training dataset as Pandas Dataframe</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>dataset_info</strong> (<a class="reference internal" href="feast.sdk.resources.feature_set.DatasetInfo.html#feast.sdk.resources.feature_set.DatasetInfo" title="feast.sdk.resources.feature_set.DatasetInfo"><em>feast.sdk.resources.feature_set.DatasetInfo</em></a>) – dataset_info to be downloaded</li>
+<li><strong>staging_location</strong> (<em>str</em><em>, </em><em>optional</em>) – url to staging_location (currently
+support a folder in GCS)</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">dataframe of the training dataset</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">pandas.DataFrame</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="feast.sdk.client.Client.get_serving_data">
+<code class="descname">get_serving_data</code><span class="sig-paren">(</span><em>feature_set</em>, <em>entity_keys</em>, <em>ts_range=None</em><span class="sig-paren">)</span> &#x2192; pandas.core.frame.DataFrame<a class="reference internal" href="../_modules/feast/sdk/client.html#Client.get_serving_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client.get_serving_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get feature value from feast serving API.</p>
+<p>If server_url is not provided, the value stored in the environment variable
+FEAST_SERVING_URL is used to connect to the serving server instead.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>feature_set</strong> (<a class="reference internal" href="feast.sdk.resources.feature_set.FeatureSet.html#feast.sdk.resources.feature_set.FeatureSet" title="feast.sdk.resources.feature_set.FeatureSet"><em>feast.sdk.resources.feature_set.FeatureSet</em></a>) – feature set
+representing the data wanted</li>
+<li><strong>(</strong> (<em>ts_range</em>) – obj: <cite>list</cite> of :obj: <a href="#id1"><span class="problematic" id="id2">`</span></a>str): list of entity keys</li>
+<li><strong>(</strong> – obj: <cite>list</cite> of str, optional): size 2 list of start
+and end time, in datetime type. It will
+filter out any feature value having event timestamp outside
+of the ts_range.</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">DataFrame of results</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">pandas.DataFrame</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="method">
+<dt id="feast.sdk.client.Client.run">
+<code class="descname">run</code><span class="sig-paren">(</span><em>importer</em>, <em>name_override=None</em>, <em>apply_entity=False</em>, <em>apply_features=False</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/client.html#Client.run"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.client.Client.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run an import job given an Importer object</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first simple">
+<li><strong>importer</strong> (<a class="reference internal" href="feast.sdk.importer.Importer.html#feast.sdk.importer.Importer" title="feast.sdk.importer.Importer"><em>feast.sdk.importer.Importer</em></a>) – importer instance</li>
+<li><strong>name_override</strong> (<em>str</em><em>, </em><em>optional</em>) – Job name override</li>
+<li><strong>apply_entity</strong> (<em>bool</em><em>, </em><em>optional</em>) – (default: False) create/update
+entity inside importer</li>
+<li><strong>apply_features</strong> (<em>bool</em><em>, </em><em>optional</em>) – (default: False) create/update
+features inside importer</li>
+</ul>
+</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body"><p class="first">job ID of the import job</p>
+</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body"><p class="first last">str</p>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="feast.sdk.client.Client.serving_url">
+<code class="descname">serving_url</code><a class="headerlink" href="#feast.sdk.client.Client.serving_url" title="Permalink to this definition">¶</a></dt>
+<dd><p>URL for accessing Feast Serving service</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Serving URL value</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">str</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="feast.sdk.client.Client.verbose">
+<code class="descname">verbose</code><a class="headerlink" href="#feast.sdk.client.Client.verbose" title="Permalink to this definition">¶</a></dt>
+<dd><p>Option (True/False) to make the SDK output more verbose logging</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">verbosity option for the SDK</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">feast</a></h1>
+
+
+
+<p class="blurb">Feast Python SDK</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=gojek&repo=feast&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../README.html">Feast Python Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api_reference.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Feast Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/_autosummary/feast.sdk.client.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+    <a href="https://github.com/gojek/feast" class="github">
+        <img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"  class="github"/>
+    </a>
+    
+
+    
+  </body>
+</html>

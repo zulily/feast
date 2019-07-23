@@ -1,0 +1,212 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>feast.sdk.utils.gs_utils &#8212; feast 0.1.2 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="shortcut icon" href="../_static/favicon.png"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="feast.sdk.utils.print_utils" href="feast.sdk.utils.print_utils.html" />
+    <link rel="prev" title="feast.sdk.utils.bq_util" href="feast.sdk.utils.bq_util.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-feast.sdk.utils.gs_utils">
+<span id="feast-sdk-utils-gs-utils"></span><h1>feast.sdk.utils.gs_utils<a class="headerlink" href="#module-feast.sdk.utils.gs_utils" title="Permalink to this headline">¶</a></h1>
+<p>Helper function to interact with BigQuery</p>
+<p class="rubric">Functions</p>
+<table border="1" class="longtable docutils">
+<colgroup>
+<col width="10%" />
+<col width="90%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><a class="reference internal" href="#feast.sdk.utils.gs_utils.df_to_gcs" title="feast.sdk.utils.gs_utils.df_to_gcs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">df_to_gcs</span></code></a>(df,&nbsp;path)</td>
+<td>Writes the given df to the path specified.</td>
+</tr>
+<tr class="row-even"><td><code class="xref py py-obj docutils literal notranslate"><span class="pre">df_to_gcs_signed_url</span></code>(df,&nbsp;signed_url)</td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="#feast.sdk.utils.gs_utils.gcs_to_df" title="feast.sdk.utils.gs_utils.gcs_to_df"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gcs_to_df</span></code></a>(path)</td>
+<td>Reads a file from gs to pandas</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="#feast.sdk.utils.gs_utils.is_gs_path" title="feast.sdk.utils.gs_utils.is_gs_path"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_gs_path</span></code></a>(path)</td>
+<td>Check if path is a gcs path</td>
+</tr>
+<tr class="row-odd"><td><code class="xref py py-obj docutils literal notranslate"><span class="pre">split_gs_path</span></code>(path)</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="function">
+<dt id="feast.sdk.utils.gs_utils.df_to_gcs">
+<code class="descclassname">feast.sdk.utils.gs_utils.</code><code class="descname">df_to_gcs</code><span class="sig-paren">(</span><em>df</em>, <em>path</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/utils/gs_utils.html#df_to_gcs"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.utils.gs_utils.df_to_gcs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Writes the given df to the path specified. Will fail if the bucket does
+not exist.</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>df</strong> (<em>pandas.DataFrame</em>) – dataframe</li>
+<li><strong>path</strong> (<em>str</em>) – path in gcs to write to</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="feast.sdk.utils.gs_utils.gcs_to_df">
+<code class="descclassname">feast.sdk.utils.gs_utils.</code><code class="descname">gcs_to_df</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/utils/gs_utils.html#gcs_to_df"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.utils.gs_utils.gcs_to_df" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reads a file from gs to pandas</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>path</strong> (<em>str</em>) – full gcs path to the file</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">dataframe</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">pandas.DataFrame</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt id="feast.sdk.utils.gs_utils.is_gs_path">
+<code class="descclassname">feast.sdk.utils.gs_utils.</code><code class="descname">is_gs_path</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/feast/sdk/utils/gs_utils.html#is_gs_path"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#feast.sdk.utils.gs_utils.is_gs_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if path is a gcs path</p>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>path</strong> (<em>str</em>) – path to file</td>
+</tr>
+<tr class="field-even field"><th class="field-name">Returns:</th><td class="field-body">is a valid gcs path</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">Return type:</th><td class="field-body">bool</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">feast</a></h1>
+
+
+
+<p class="blurb">Feast Python SDK</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=gojek&repo=feast&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../README.html">Feast Python Library</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../api_reference.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../api_reference.html#client">Client</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api_reference.html#import-job">Import Job</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../api_reference.html#utilities">Utilities</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="feast.sdk.utils.bq_util.html">feast.sdk.utils.bq_util</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">feast.sdk.utils.gs_utils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="feast.sdk.utils.print_utils.html">feast.sdk.utils.print_utils</a></li>
+<li class="toctree-l3"><a class="reference internal" href="feast.sdk.utils.types.html">feast.sdk.utils.types</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../api_reference.html#resources">Resources</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../api_reference.html">API Reference</a><ul>
+      <li>Previous: <a href="feast.sdk.utils.bq_util.html" title="previous chapter">feast.sdk.utils.bq_util</a></li>
+      <li>Next: <a href="feast.sdk.utils.print_utils.html" title="next chapter">feast.sdk.utils.print_utils</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Feast Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/_autosummary/feast.sdk.utils.gs_utils.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+    <a href="https://github.com/gojek/feast" class="github">
+        <img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"  class="github"/>
+    </a>
+    
+
+    
+  </body>
+</html>

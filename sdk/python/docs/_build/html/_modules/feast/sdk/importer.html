@@ -1,0 +1,655 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>feast.sdk.importer &#8212; feast 0.1.2 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <link rel="shortcut icon" href="../../../_static/favicon.png"/>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for feast.sdk.importer</h1><div class="highlight"><pre>
+<span></span><span class="c1"># Copyright 2018 The Feast Authors</span>
+<span class="c1">#</span>
+<span class="c1"># Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);</span>
+<span class="c1"># you may not use this file except in compliance with the License.</span>
+<span class="c1"># You may obtain a copy of the License at</span>
+<span class="c1">#</span>
+<span class="c1">#     https://www.apache.org/licenses/LICENSE-2.0</span>
+<span class="c1">#</span>
+<span class="c1"># Unless required by applicable law or agreed to in writing, software</span>
+<span class="c1"># distributed under the License is distributed on an &quot;AS IS&quot; BASIS,</span>
+<span class="c1"># WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span>
+<span class="c1"># See the License for the specific language governing permissions and</span>
+<span class="c1"># limitations under the License.</span>
+
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">ntpath</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">from</span> <span class="nn">google.cloud</span> <span class="k">import</span> <span class="n">bigquery</span>
+<span class="kn">from</span> <span class="nn">google.protobuf.timestamp_pb2</span> <span class="k">import</span> <span class="n">Timestamp</span>
+
+<span class="kn">import</span> <span class="nn">feast.sdk.client</span>
+<span class="kn">from</span> <span class="nn">feast.core.CoreService_pb2</span> <span class="k">import</span> <span class="n">CoreServiceTypes</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.resources.entity</span> <span class="k">import</span> <span class="n">Entity</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.resources.feature</span> <span class="k">import</span> <span class="n">Feature</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.utils.bq_util</span> <span class="k">import</span> <span class="n">head</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.utils.gs_utils</span> <span class="k">import</span> <span class="n">gcs_to_df</span><span class="p">,</span> <span class="n">is_gs_path</span><span class="p">,</span> <span class="n">df_to_gcs</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.utils.print_utils</span> <span class="k">import</span> <span class="n">spec_to_yaml</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.utils.types</span> <span class="k">import</span> <span class="n">dtype_to_value_type</span>
+<span class="kn">from</span> <span class="nn">feast.specs.ImportSpec_pb2</span> <span class="k">import</span> <span class="n">ImportSpec</span><span class="p">,</span> <span class="n">Schema</span>
+
+
+<div class="viewcode-block" id="Importer"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer">[docs]</a><span class="k">class</span> <span class="nc">Importer</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Importer class helps with the creation of import spec for running ingestion jobs&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Importer.__init__"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer.__init__">[docs]</a>    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">specs</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">properties</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_properties</span> <span class="o">=</span> <span class="n">properties</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_specs</span> <span class="o">=</span> <span class="n">specs</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">df</span> <span class="o">=</span> <span class="n">df</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">source</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;str: source of the data&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_properties</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;source&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">size</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;str: number of rows in the data&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_properties</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;size&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">require_staging</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;bool: whether the data needs to be staged&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_properties</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;require_staging&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">remote_path</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;str: remote path of the file&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_properties</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;remote_path&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">spec</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;feast.specs.ImportSpec_pb2.ImportSpec: </span>
+<span class="sd">            import spec for this dataset&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_specs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;import&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">features</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;list[feast.specs.FeatureSpec_pb2.FeatureSpec]: </span>
+<span class="sd">            list of features associated with this dataset&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_specs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;features&quot;</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">entity</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;feast.specs.EntitySpec_pb2.EntitySpec: </span>
+<span class="sd">            entity associated with this dataset&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_specs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entity&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Importer.from_csv"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer.from_csv">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_csv</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">,</span>
+        <span class="n">entity</span><span class="p">,</span>
+        <span class="n">owner</span><span class="p">,</span>
+        <span class="n">staging_location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">id_column</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">feature_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">timestamp_column</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">timestamp_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">serving_store</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">warehouse_store</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">job_options</span><span class="o">=</span><span class="p">{},</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates an importer from a given csv dataset. </span>
+<span class="sd">        This file can be either local or remote (in gcs). If it&#39;s a local file </span>
+<span class="sd">        then staging_location must be determined.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            path (str): path to csv file</span>
+<span class="sd">            entity (str): entity id</span>
+<span class="sd">            owner (str): owner</span>
+<span class="sd">            staging_location (str, optional): Defaults to None. Staging location </span>
+<span class="sd">                for ingesting a local csv file.</span>
+<span class="sd">            id_column (str, optional): Defaults to None. Id column in the csv. </span>
+<span class="sd">                If not set, will default to the `entity` argument.</span>
+<span class="sd">            feature_columns ([str], optional): Defaults to None. Feature columns</span>
+<span class="sd">                to ingest. If not set, the importer will by default ingest all </span>
+<span class="sd">                available columns.</span>
+<span class="sd">            timestamp_column (str, optional): Defaults to None. Timestamp </span>
+<span class="sd">                column in the csv. If not set, defaults to timestamp value.</span>
+<span class="sd">            timestamp_value (datetime, optional): Defaults to current datetime. </span>
+<span class="sd">                Timestamp value to assign to all features in the dataset.</span>
+<span class="sd">            serving_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">                Serving store to write the features in this instance to.</span>
+<span class="sd">            warehouse_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">                Warehouse store to write the features in this instance to.</span>
+<span class="sd">            job_options (dict): Defaults to empty dict. Additional job options.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Importer: the importer for the dataset provided.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">src_type</span> <span class="o">=</span> <span class="s2">&quot;file.csv&quot;</span>
+        <span class="n">source_options</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">source_options</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">],</span> <span class="n">require_staging</span> <span class="o">=</span> <span class="n">_get_remote_location</span><span class="p">(</span>
+            <span class="n">path</span><span class="p">,</span> <span class="n">staging_location</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">is_gs_path</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">gcs_to_df</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">schema</span><span class="p">,</span> <span class="n">features</span> <span class="o">=</span> <span class="n">_detect_schema_and_feature</span><span class="p">(</span>
+            <span class="n">entity</span><span class="p">,</span>
+            <span class="n">owner</span><span class="p">,</span>
+            <span class="n">id_column</span><span class="p">,</span>
+            <span class="n">feature_columns</span><span class="p">,</span>
+            <span class="n">timestamp_column</span><span class="p">,</span>
+            <span class="n">timestamp_value</span><span class="p">,</span>
+            <span class="n">serving_store</span><span class="p">,</span>
+            <span class="n">warehouse_store</span><span class="p">,</span>
+            <span class="n">df</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">iport_spec</span> <span class="o">=</span> <span class="n">_create_import</span><span class="p">(</span>
+            <span class="n">src_type</span><span class="p">,</span> <span class="n">source_options</span><span class="p">,</span> <span class="n">job_options</span><span class="p">,</span> <span class="n">entity</span><span class="p">,</span> <span class="n">schema</span>
+        <span class="p">)</span>
+
+        <span class="n">props</span> <span class="o">=</span> <span class="n">_properties</span><span class="p">(</span>
+            <span class="n">src_type</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">),</span> <span class="n">require_staging</span><span class="p">,</span> <span class="n">source_options</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">specs</span> <span class="o">=</span> <span class="n">_specs</span><span class="p">(</span><span class="n">iport_spec</span><span class="p">,</span> <span class="n">Entity</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">entity</span><span class="p">),</span> <span class="n">features</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">specs</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">props</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Importer.from_bq"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer.from_bq">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_bq</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">bq_path</span><span class="p">,</span>
+        <span class="n">entity</span><span class="p">,</span>
+        <span class="n">owner</span><span class="p">,</span>
+        <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">id_column</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">feature_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">timestamp_column</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">timestamp_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">serving_store</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">warehouse_store</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">job_options</span><span class="o">=</span><span class="p">{},</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates an importer from a given bigquery table. </span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            bq_path (str): path to bigquery table, in the format </span>
+<span class="sd">                            project.dataset.table</span>
+<span class="sd">            entity (str): entity id</span>
+<span class="sd">            owner (str): owner</span>
+<span class="sd">            limit (int, optional): Defaults to 10. The maximum number of rows to </span>
+<span class="sd">                read into the importer df.</span>
+<span class="sd">            id_column (str, optional): Defaults to None. Id column in the csv. </span>
+<span class="sd">                If not set, will default to the `entity` argument.</span>
+<span class="sd">            feature_columns ([str], optional): Defaults to None. Feature columns</span>
+<span class="sd">                to ingest. If not set, the importer will by default ingest all </span>
+<span class="sd">                available columns.</span>
+<span class="sd">            timestamp_column (str, optional): Defaults to None. Timestamp </span>
+<span class="sd">                column in the csv. If not set, defaults to timestamp value.</span>
+<span class="sd">            timestamp_value (datetime, optional): Defaults to current datetime. </span>
+<span class="sd">                Timestamp value to assign to all features in the dataset.</span>
+<span class="sd">            serving_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">                Serving store to write the features in this instance to.</span>
+<span class="sd">            warehouse_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">                Warehouse store to write the features in this instance to.</span>
+<span class="sd">            job_options (dict): Defaults to empty dict. Additional job options.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Importer: the importer for the dataset provided.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">cli</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">Client</span><span class="p">()</span>
+        <span class="n">project</span><span class="p">,</span> <span class="n">dataset_id</span><span class="p">,</span> <span class="n">table_id</span> <span class="o">=</span> <span class="n">bq_path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
+        <span class="n">dataset_ref</span> <span class="o">=</span> <span class="n">cli</span><span class="o">.</span><span class="n">dataset</span><span class="p">(</span><span class="n">dataset_id</span><span class="p">,</span> <span class="n">project</span><span class="o">=</span><span class="n">project</span><span class="p">)</span>
+        <span class="n">table_ref</span> <span class="o">=</span> <span class="n">dataset_ref</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="n">table_id</span><span class="p">)</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="n">cli</span><span class="o">.</span><span class="n">get_table</span><span class="p">(</span><span class="n">table_ref</span><span class="p">)</span>
+
+        <span class="n">source_options</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;project&quot;</span><span class="p">:</span> <span class="n">project</span><span class="p">,</span> <span class="s2">&quot;dataset&quot;</span><span class="p">:</span> <span class="n">dataset_id</span><span class="p">,</span> <span class="s2">&quot;table&quot;</span><span class="p">:</span> <span class="n">table_id</span><span class="p">}</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">head</span><span class="p">(</span><span class="n">cli</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span>
+        <span class="n">schema</span><span class="p">,</span> <span class="n">features</span> <span class="o">=</span> <span class="n">_detect_schema_and_feature</span><span class="p">(</span>
+            <span class="n">entity</span><span class="p">,</span>
+            <span class="n">owner</span><span class="p">,</span>
+            <span class="n">id_column</span><span class="p">,</span>
+            <span class="n">feature_columns</span><span class="p">,</span>
+            <span class="n">timestamp_column</span><span class="p">,</span>
+            <span class="n">timestamp_value</span><span class="p">,</span>
+            <span class="n">serving_store</span><span class="p">,</span>
+            <span class="n">warehouse_store</span><span class="p">,</span>
+            <span class="n">df</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">iport_spec</span> <span class="o">=</span> <span class="n">_create_import</span><span class="p">(</span>
+            <span class="s2">&quot;bigquery&quot;</span><span class="p">,</span> <span class="n">source_options</span><span class="p">,</span> <span class="n">job_options</span><span class="p">,</span> <span class="n">entity</span><span class="p">,</span> <span class="n">schema</span>
+        <span class="p">)</span>
+
+        <span class="n">props</span> <span class="o">=</span> <span class="n">_properties</span><span class="p">(</span><span class="s2">&quot;bigquery&quot;</span><span class="p">,</span> <span class="n">table</span><span class="o">.</span><span class="n">num_rows</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">specs</span> <span class="o">=</span> <span class="n">_specs</span><span class="p">(</span><span class="n">iport_spec</span><span class="p">,</span> <span class="n">Entity</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">entity</span><span class="p">),</span> <span class="n">features</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">specs</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">props</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Importer.from_df"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer.from_df">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">from_df</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">df</span><span class="p">,</span>
+        <span class="n">entity</span><span class="p">,</span>
+        <span class="n">owner</span><span class="p">,</span>
+        <span class="n">staging_location</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">id_column</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">feature_columns</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">timestamp_column</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">timestamp_value</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">serving_store</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">warehouse_store</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">job_options</span><span class="o">=</span><span class="p">{},</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Creates an importer from a given pandas dataframe. </span>
+<span class="sd">        To import a file from a dataframe, the data will have to be staged.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            path (str): path to csv file</span>
+<span class="sd">            entity (str): entity id</span>
+<span class="sd">            owner (str): owner</span>
+<span class="sd">            staging_location (str, optional): Staging location for ingesting a local csv file.</span>
+<span class="sd">            id_column (str, optional): Defaults to None. Id column in the csv.</span>
+<span class="sd">                If not set, will default to the `entity` argument.</span>
+<span class="sd">            feature_columns ([str], optional): Defaults to None. Feature columns</span>
+<span class="sd">                to ingest. If not set, the importer will by default ingest all </span>
+<span class="sd">                available columns.</span>
+<span class="sd">            timestamp_column (str, optional): Defaults to None. Timestamp </span>
+<span class="sd">                column in the csv. If not set, defaults to timestamp value.</span>
+<span class="sd">            timestamp_value (datetime, optional): Defaults to current datetime. </span>
+<span class="sd">                Timestamp value to assign to all features in the dataset.</span>
+<span class="sd">            serving_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">                Serving store to write the features in this instance to.</span>
+<span class="sd">            warehouse_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">                Warehouse store to write the features in this instance to.</span>
+<span class="sd">            job_options (dict): Defaults to empty dict. Additional job options.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            Importer: the importer for the dataset provided.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tmp_file_name</span> <span class="o">=</span> <span class="s2">&quot;tmp_</span><span class="si">{}</span><span class="s2">_</span><span class="si">{}</span><span class="s2">.csv&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">entity</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">)))</span>
+        <span class="n">src_type</span> <span class="o">=</span> <span class="s2">&quot;file.csv&quot;</span>
+        <span class="n">source_options</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">source_options</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">],</span> <span class="n">require_staging</span> <span class="o">=</span> <span class="n">_get_remote_location</span><span class="p">(</span>
+            <span class="n">tmp_file_name</span><span class="p">,</span> <span class="n">staging_location</span>
+        <span class="p">)</span>
+        <span class="n">schema</span><span class="p">,</span> <span class="n">features</span> <span class="o">=</span> <span class="n">_detect_schema_and_feature</span><span class="p">(</span>
+            <span class="n">entity</span><span class="p">,</span>
+            <span class="n">owner</span><span class="p">,</span>
+            <span class="n">id_column</span><span class="p">,</span>
+            <span class="n">feature_columns</span><span class="p">,</span>
+            <span class="n">timestamp_column</span><span class="p">,</span>
+            <span class="n">timestamp_value</span><span class="p">,</span>
+            <span class="n">serving_store</span><span class="p">,</span>
+            <span class="n">warehouse_store</span><span class="p">,</span>
+            <span class="n">df</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">iport_spec</span> <span class="o">=</span> <span class="n">_create_import</span><span class="p">(</span>
+            <span class="n">src_type</span><span class="p">,</span> <span class="n">source_options</span><span class="p">,</span> <span class="n">job_options</span><span class="p">,</span> <span class="n">entity</span><span class="p">,</span> <span class="n">schema</span>
+        <span class="p">)</span>
+
+        <span class="n">props</span> <span class="o">=</span> <span class="n">_properties</span><span class="p">(</span>
+            <span class="s2">&quot;dataframe&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">),</span> <span class="n">require_staging</span><span class="p">,</span> <span class="n">source_options</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">specs</span> <span class="o">=</span> <span class="n">_specs</span><span class="p">(</span><span class="n">iport_spec</span><span class="p">,</span> <span class="n">Entity</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">entity</span><span class="p">),</span> <span class="n">features</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">specs</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">props</span><span class="p">)</span></div>
+
+    <span class="c1"># noinspection PyProtectedMember</span>
+<div class="viewcode-block" id="Importer.stage"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer.stage">[docs]</a>    <span class="k">def</span> <span class="nf">stage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">feast_client</span><span class="p">:</span> <span class="n">feast</span><span class="o">.</span><span class="n">sdk</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">Client</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Stage the data to its remote location</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            feast_client:</span>
+
+<span class="sd">        Returns: None</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">require_staging</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">ts_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">schema</span><span class="o">.</span><span class="n">timestampColumn</span>
+        <span class="k">if</span> <span class="n">ts_col</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="n">_convert_timestamp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">,</span> <span class="n">ts_col</span><span class="p">)</span>
+
+        <span class="c1"># staging is required but user does not provide staging location</span>
+        <span class="c1"># importer will request on-demand upload URL from Feast Core</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">remote_path</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">&quot;FILE.CSV&quot;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Only type &#39;csv&#39; is currently supported for using Importer without staging location&quot;</span>
+                <span class="p">)</span>
+            <span class="n">request</span> <span class="o">=</span> <span class="n">CoreServiceTypes</span><span class="o">.</span><span class="n">GetUploadUrlRequest</span><span class="p">(</span>
+                <span class="n">fileType</span><span class="o">=</span><span class="n">CoreServiceTypes</span><span class="o">.</span><span class="n">GetUploadUrlRequest</span><span class="o">.</span><span class="n">FileType</span><span class="o">.</span><span class="n">Value</span><span class="p">(</span><span class="s2">&quot;CSV&quot;</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">response</span> <span class="o">=</span> <span class="n">feast_client</span><span class="o">.</span><span class="n">_core_service_stub</span><span class="o">.</span><span class="n">GetUploadUrl</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+            <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">()</span> <span class="k">as</span> <span class="n">df_tempfile</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">df_tempfile</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">requests</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">response</span><span class="o">.</span><span class="n">url</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">df_tempfile</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">sourceOptions</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">f</span><span class="s2">&quot;gs://</span><span class="si">{response.path}</span><span class="s2">&quot;</span><span class="p">})</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">df_to_gcs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">df</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">remote_path</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Importer.describe"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer.describe">[docs]</a>    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Print out the import spec.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">spec_to_yaml</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">))</span></div>
+
+<div class="viewcode-block" id="Importer.dump"><a class="viewcode-back" href="../../../_autosummary/feast.sdk.importer.Importer.html#feast.sdk.importer.Importer.dump">[docs]</a>    <span class="k">def</span> <span class="nf">dump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Dump the import spec to the provided path</span>
+<span class="sd">        </span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            path (str): path to dump the spec to</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">spec_to_yaml</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saved spec to </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">path</span><span class="p">))</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">_convert_timestamp</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">timestamp_col</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Converts the given df&#39;s timestamp column to ISO8601 format</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df</span><span class="p">[</span><span class="n">timestamp_col</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">timestamp_col</span><span class="p">])</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">dt</span><span class="p">:</span> <span class="n">dt</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_properties</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">require_staging</span><span class="p">,</span> <span class="n">remote</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Args:</span>
+<span class="sd">        source (str): source of the data</span>
+<span class="sd">        size (int): number of rows of the dataset </span>
+<span class="sd">        require_staging (bool): whether the file requires staging</span>
+<span class="sd">        remote (str): remote path </span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: set of importer properties</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;source&quot;</span><span class="p">:</span> <span class="n">source</span><span class="p">,</span>
+        <span class="s2">&quot;size&quot;</span><span class="p">:</span> <span class="n">size</span><span class="p">,</span>
+        <span class="s2">&quot;require_staging&quot;</span><span class="p">:</span> <span class="n">require_staging</span><span class="p">,</span>
+        <span class="s2">&quot;remote_path&quot;</span><span class="p">:</span> <span class="n">remote</span><span class="p">,</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">_specs</span><span class="p">(</span><span class="n">iport</span><span class="p">,</span> <span class="n">entity</span><span class="p">,</span> <span class="n">features</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Args:</span>
+<span class="sd">        iport {} -- [description]</span>
+<span class="sd">        entity {[type]} -- [description]</span>
+<span class="sd">        features {[type]} -- [description]</span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        [type] -- [description]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;import&quot;</span><span class="p">:</span> <span class="n">iport</span><span class="p">,</span> <span class="s2">&quot;features&quot;</span><span class="p">:</span> <span class="n">features</span><span class="p">,</span> <span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="n">entity</span><span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">_get_remote_location</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">staging_location</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Get the remote location of the file</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        path (str): raw path of the file</span>
+<span class="sd">        staging_location (str): path to stage the file</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">is_gs_path</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">path</span><span class="p">,</span> <span class="kc">False</span>
+
+    <span class="k">if</span> <span class="n">staging_location</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="kc">True</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">is_gs_path</span><span class="p">(</span><span class="n">staging_location</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Staging location must be in GCS&quot;</span><span class="p">)</span>
+
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">ntpath</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">staging_location</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span> <span class="o">+</span> <span class="n">filename</span><span class="p">,</span> <span class="kc">True</span>
+
+
+<span class="k">def</span> <span class="nf">_detect_schema_and_feature</span><span class="p">(</span>
+    <span class="n">entity</span><span class="p">,</span>
+    <span class="n">owner</span><span class="p">,</span>
+    <span class="n">id_column</span><span class="p">,</span>
+    <span class="n">feature_columns</span><span class="p">,</span>
+    <span class="n">timestamp_column</span><span class="p">,</span>
+    <span class="n">timestamp_value</span><span class="p">,</span>
+    <span class="n">serving_store</span><span class="p">,</span>
+    <span class="n">warehouse_store</span><span class="p">,</span>
+    <span class="n">df</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create schema object for import spec.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        entity (str): entity name</span>
+<span class="sd">        id_column (str): column name of entity id</span>
+<span class="sd">        timestamp_column (str): column name of timestamp</span>
+<span class="sd">        timestamp_value (datetime.datetime): timestamp to apply to all </span>
+<span class="sd">            rows in dataset</span>
+<span class="sd">        feature_columns (str): list of column to be extracted</span>
+<span class="sd">        df (pandas.Dataframe): pandas dataframe of the data</span>
+<span class="sd">        serving_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">            Serving store to write the features in this instance to.</span>
+<span class="sd">        warehouse_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">            Warehouse store to write the features in this instance to.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        feast.specs.ImportSpec_pb2.Schema: schema of the data</span>
+<span class="sd">        dict of str: feast.specs.FeatureSpec_pb2.FeatureSpec: features in the data</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        Exception -- [description]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">schema</span> <span class="o">=</span> <span class="n">Schema</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">id_column</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">schema</span><span class="o">.</span><span class="n">entityIdColumn</span> <span class="o">=</span> <span class="n">id_column</span>
+    <span class="k">elif</span> <span class="n">entity</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="n">schema</span><span class="o">.</span><span class="n">entityIdColumn</span> <span class="o">=</span> <span class="n">entity</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Column with name </span><span class="si">{}</span><span class="s2"> is not found&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">entity</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">timestamp_column</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">schema</span><span class="o">.</span><span class="n">timestampColumn</span> <span class="o">=</span> <span class="n">timestamp_column</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">timestamp_value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ts</span> <span class="o">=</span> <span class="n">Timestamp</span><span class="p">()</span>
+            <span class="n">ts</span><span class="o">.</span><span class="n">GetCurrentTime</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ts</span> <span class="o">=</span> <span class="n">Timestamp</span><span class="p">(</span>
+                <span class="n">seconds</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">timestamp_value</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">1970</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="n">schema</span><span class="o">.</span><span class="n">timestampValue</span><span class="o">.</span><span class="n">CopyFrom</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span>
+
+    <span class="n">features</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">feature_columns</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># check if all column exist and create feature accordingly</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">feature_columns</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">column</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Column with name </span><span class="si">{}</span><span class="s2"> is not found&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+            <span class="n">features</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="o">=</span> <span class="n">_create_feature</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">column</span><span class="p">],</span> <span class="n">entity</span><span class="p">,</span> <span class="n">owner</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># get all column except entity id and timestampColumn</span>
+        <span class="n">feature_columns</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+        <span class="n">_remove_safely</span><span class="p">(</span><span class="n">feature_columns</span><span class="p">,</span> <span class="n">schema</span><span class="o">.</span><span class="n">entityIdColumn</span><span class="p">)</span>
+        <span class="n">_remove_safely</span><span class="p">(</span><span class="n">feature_columns</span><span class="p">,</span> <span class="n">schema</span><span class="o">.</span><span class="n">timestampColumn</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">feature_columns</span><span class="p">:</span>
+            <span class="n">features</span><span class="p">[</span><span class="n">column</span><span class="p">]</span> <span class="o">=</span> <span class="n">_create_feature</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">column</span><span class="p">],</span> <span class="n">entity</span><span class="p">,</span> <span class="n">owner</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+        <span class="n">field</span> <span class="o">=</span> <span class="n">schema</span><span class="o">.</span><span class="n">fields</span><span class="o">.</span><span class="n">add</span><span class="p">()</span>
+        <span class="n">field</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">col</span>
+        <span class="k">if</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">features</span><span class="p">:</span>
+            <span class="n">field</span><span class="o">.</span><span class="n">featureId</span> <span class="o">=</span> <span class="n">features</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">id</span>
+
+    <span class="n">features_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">features</span><span class="p">:</span>
+        <span class="n">features_dict</span><span class="p">[</span><span class="n">features</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">.</span><span class="n">id</span><span class="p">]</span> <span class="o">=</span> <span class="n">features</span><span class="p">[</span><span class="n">k</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">schema</span><span class="p">,</span> <span class="n">features_dict</span>
+
+
+<span class="k">def</span> <span class="nf">_create_feature</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">entity</span><span class="p">,</span> <span class="n">owner</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create Feature object. </span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        column (pandas.Series): data column</span>
+<span class="sd">        entity (str): entity name</span>
+<span class="sd">        owner (str): owner of the feature</span>
+<span class="sd">        serving_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">            Serving store to write the features in this instance to.</span>
+<span class="sd">        warehouse_store (feast.sdk.resources.feature.DataStore): Defaults to None.</span>
+<span class="sd">            Warehouse store to write the features in this instance to.</span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        feast.sdk.resources.Feature: feature for this data column</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">feature</span> <span class="o">=</span> <span class="n">Feature</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">column</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="n">entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span>
+        <span class="n">owner</span><span class="o">=</span><span class="n">owner</span><span class="p">,</span>
+        <span class="n">value_type</span><span class="o">=</span><span class="n">dtype_to_value_type</span><span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">feature</span>
+
+
+<span class="k">def</span> <span class="nf">_create_import</span><span class="p">(</span><span class="n">import_type</span><span class="p">,</span> <span class="n">source_options</span><span class="p">,</span> <span class="n">job_options</span><span class="p">,</span> <span class="n">entity</span><span class="p">,</span> <span class="n">schema</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Create an import spec.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        import_type (str): import type</span>
+<span class="sd">        source_options (dict): import spec source options</span>
+<span class="sd">        jobOptions (dict): import spec job options</span>
+<span class="sd">        entity (str): entity</span>
+<span class="sd">        schema (feast.specs.ImportSpec_pb2.Schema): schema of the file</span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        feast.specs.ImportSpec_pb2.ImportSpec: import spec</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">ImportSpec</span><span class="p">(</span>
+        <span class="nb">type</span><span class="o">=</span><span class="n">import_type</span><span class="p">,</span>
+        <span class="n">sourceOptions</span><span class="o">=</span><span class="n">source_options</span><span class="p">,</span>
+        <span class="n">jobOptions</span><span class="o">=</span><span class="n">job_options</span><span class="p">,</span>
+        <span class="n">entities</span><span class="o">=</span><span class="p">[</span><span class="n">entity</span><span class="p">],</span>
+        <span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_remove_safely</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">columns</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">column</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">pass</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">feast</a></h1>
+
+
+
+<p class="blurb">Feast Python SDK</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=gojek&repo=feast&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../README.html">Feast Python Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_reference.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Feast Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+    <a href="https://github.com/gojek/feast" class="github">
+        <img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"  class="github"/>
+    </a>
+    
+
+    
+  </body>
+</html>

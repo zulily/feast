@@ -1,0 +1,276 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Feast Python Library &#8212; feast 0.1.2 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="shortcut icon" href="_static/favicon.png"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API Reference" href="api_reference.html" />
+    <link rel="prev" title="Feast Python Library" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="feast-python-library">
+<h1>Feast Python Library<a class="headerlink" href="#feast-python-library" title="Permalink to this headline">¶</a></h1>
+<p>Feast (Feature Store) is a tool to manage storage and access of machine learning features. It aims to:</p>
+<ul class="simple">
+<li>Support ingesting feature data via batch or streaming</li>
+<li>Provide scalable storage of feature data for serving and training</li>
+<li>Provide an API for low latency access of features</li>
+<li>Enable discovery and documentation of features</li>
+<li>Provide an overview of the general health of features in the system</li>
+</ul>
+<p>This Python library allows you to <strong>register</strong> features and entities in Feast, <strong>ingest</strong> feature values, and retrieve the values for model <strong>training and serving</strong>.</p>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>Install <code class="docutils literal notranslate"><span class="pre">feast</span></code> library using <code class="docutils literal notranslate"><span class="pre">pip</span></code>:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>pip install feast
+</pre></div>
+</div>
+<blockquote>
+<div>Make sure you have a running Feast instance. If not, follow this <a class="reference external" href="https://github.com/gojek/feast/blob/72cc8bd2cd0040f7bc44df255f95bad00cacd720/docs/install.md">installation guide</a></div></blockquote>
+</div>
+<div class="section" id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h2>
+<p>All interaction with feast cluster happens via an instance of <code class="docutils literal notranslate"><span class="pre">feast.sdk.client.Client</span></code>. The client should be pointed to correct core/serving URL of the feast cluster</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">feast.sdk.client</span> <span class="kn">import</span> <span class="n">Client</span>
+
+<span class="c1"># Assuming you are running Feast locally so Feast hostname is localhost</span>
+<span class="n">FEAST_CORE_URL</span><span class="o">=</span><span class="s2">&quot;localhost:8080&quot;</span>
+<span class="n">FEAST_SERVING_URL</span><span class="o">=</span><span class="s2">&quot;localhost:8081&quot;</span>
+
+<span class="n">feast_client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span>
+    <span class="n">core_url</span><span class="o">=</span><span class="n">FEAST_CORE_URL</span><span class="p">,</span>
+    <span class="n">serving_url</span><span class="o">=</span><span class="n">FEAST_SERVING_URL</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="spec-registration">
+<h2>Spec Registration<a class="headerlink" href="#spec-registration" title="Permalink to this headline">¶</a></h2>
+<p>Entities and features can be registered explicitly beforehand or during the data ingestion. In order to register an entity using Feast client:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">feast.sdk.resources.entity</span> <span class="kn">import</span> <span class="n">Entity</span>
+
+<span class="n">entity</span> <span class="o">=</span> <span class="n">Entity</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;word found in shakespearean works&quot;</span>
+<span class="p">)</span>
+
+<span class="n">feast_client</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">entity</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To register a feature for an entity using Feast client:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">feast.sdk.resources.feature</span> <span class="kn">import</span> <span class="n">Feature</span><span class="p">,</span> <span class="n">Datastore</span><span class="p">,</span> <span class="n">ValueType</span>
+
+<span class="n">word_count_feature</span> <span class="o">=</span> <span class="n">Feature</span><span class="p">(</span>
+    <span class="n">entity</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;count&quot;</span><span class="p">,</span>
+    <span class="n">value_type</span><span class="o">=</span><span class="n">ValueType</span><span class="o">.</span><span class="n">INT32</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;number of times the word appears&quot;</span><span class="p">,</span>
+    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;tag1&quot;</span><span class="p">,</span> <span class="s2">&quot;tag2&quot;</span><span class="p">],</span>
+    <span class="n">owner</span><span class="o">=</span><span class="s2">&quot;bob@feast.com&quot;</span><span class="p">,</span>
+    <span class="n">uri</span><span class="o">=</span><span class="s2">&quot;https://github.com/bob/example&quot;</span>
+<span class="p">)</span>
+
+<span class="n">feast_client</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">word_count_feature</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Read more on entity/feature fields here: <a class="reference external" href="https://github.com/gojek/feast/blob/72cc8bd2cd0040f7bc44df255f95bad00cacd720/docs/specs.md">Entity Spec</a></p>
+</div>
+<div class="section" id="ingestion">
+<h2>Ingestion<a class="headerlink" href="#ingestion" title="Permalink to this headline">¶</a></h2>
+<p>Let’s create a simple <a class="reference external" href="https://pandas.pydata.org/">pandas</a> dataframe</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+
+<span class="n">words_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+    <span class="s2">&quot;word&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;the&quot;</span><span class="p">,</span> <span class="s2">&quot;and&quot;</span><span class="p">,</span> <span class="s2">&quot;i&quot;</span><span class="p">,</span> <span class="s2">&quot;to&quot;</span><span class="p">,</span> <span class="s2">&quot;of&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span><span class="p">],</span>
+    <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="p">[</span><span class="mi">28944</span><span class="p">,</span> <span class="mi">27317</span><span class="p">,</span> <span class="mi">21120</span><span class="p">,</span> <span class="mi">20136</span><span class="p">,</span> <span class="mi">17181</span><span class="p">,</span> <span class="mi">14945</span><span class="p">]</span>
+<span class="p">})</span>
+</pre></div>
+</div>
+<p>And import it into the feast store:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span> <span class="nn">feast.sdk.importer</span> <span class="kn">import</span> <span class="n">Importer</span>
+
+<span class="n">STAGING_LOCATION</span> <span class="o">=</span> <span class="s2">&quot;gs://your-bucket&quot;</span>
+
+<span class="n">importer</span> <span class="o">=</span> <span class="n">Importer</span><span class="o">.</span><span class="n">from_df</span><span class="p">(</span><span class="n">words_df</span><span class="p">,</span>
+                           <span class="n">entity</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span>
+                           <span class="n">owner</span><span class="o">=</span><span class="s2">&quot;bob@feast.com&quot;</span><span class="p">,</span>
+                           <span class="n">id_column</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span>
+                           <span class="n">timestamp_value</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2018</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="n">feast_client</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">importer</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will start an import job and ingest data into both warehouse and serving feast stores.
+You can also import data from a CSV file with <code class="docutils literal notranslate"><span class="pre">Importer.from_csv(...)</span></code> or  BigQuery using <code class="docutils literal notranslate"><span class="pre">Importer.from_bq(...)</span></code></p>
+</div>
+<div class="section" id="model-training">
+<h2>Model Training<a class="headerlink" href="#model-training" title="Permalink to this headline">¶</a></h2>
+<p>Now, when you have some data in the Feast, you may want to retrieve that dataset and train your model. Creating a training dataset allows you to isolate the data that goes into the model training step, allowing for reproduction and traceability.</p>
+<p>You can retrieve the features required for training by specifying them in a <code class="docutils literal notranslate"><span class="pre">FeatureSet</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">feast.sdk.resources.feature_set</span> <span class="kn">import</span> <span class="n">FeatureSet</span>
+
+<span class="n">feature_set</span> <span class="o">=</span> <span class="n">FeatureSet</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span> <span class="n">features</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;word.count&quot;</span><span class="p">])</span>
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">feast_client</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="n">feature_set</span><span class="p">,</span>
+                                      <span class="n">start_date</span><span class="o">=</span><span class="s2">&quot;2010-01-01&quot;</span><span class="p">,</span>
+                                      <span class="n">end_date</span><span class="o">=</span><span class="s2">&quot;2018-01-01&quot;</span><span class="p">)</span>
+<span class="n">train_df</span> <span class="o">=</span> <span class="n">feast_client</span><span class="o">.</span><span class="n">download_dataset_to_df</span><span class="p">(</span><span class="n">dataset</span><span class="p">)</span>
+
+<span class="c1"># train your model</span>
+<span class="c1"># ...</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="model-serving">
+<h2>Model Serving<a class="headerlink" href="#model-serving" title="Permalink to this headline">¶</a></h2>
+<p>Feast provides a means for accessing stored features in a serving environment, at low latency and high load. You have to provide the ID of the entities and features to retrieve from the Serving store:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">feature_set</span> <span class="o">=</span> <span class="n">FeatureSet</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="s2">&quot;word&quot;</span><span class="p">,</span> <span class="n">features</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;word.count&quot;</span><span class="p">])</span>
+<span class="n">serving_df</span> <span class="o">=</span> <span class="n">feast_client</span><span class="o">.</span><span class="n">get_serving_data</span><span class="p">(</span>
+  <span class="n">feature_set</span><span class="p">,</span>
+  <span class="n">entity_keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;you&quot;</span><span class="p">,</span> <span class="s2">&quot;and&quot;</span><span class="p">,</span> <span class="s2">&quot;i&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>This will return a dataframe in <code class="docutils literal notranslate"><span class="pre">serving_df</span></code> object as follows:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="33%" />
+<col width="33%" />
+<col width="33%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">&#160;</th>
+<th class="head">word</th>
+<th class="head">count</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>0</td>
+<td>and</td>
+<td>27317</td>
+</tr>
+<tr class="row-odd"><td>1</td>
+<td>you</td>
+<td>13989</td>
+</tr>
+<tr class="row-even"><td>2</td>
+<td>i</td>
+<td>21120</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">feast</a></h1>
+
+
+
+<p class="blurb">Feast Python SDK</p>
+
+
+
+
+<p>
+<iframe src="https://ghbtns.com/github-btn.html?user=gojek&repo=feast&type=star&count=true&size=large&v=2"
+  allowtransparency="true" frameborder="0" scrolling="0" width="200px" height="35px"></iframe>
+</p>
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Feast Python Library</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#spec-registration">Spec Registration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ingestion">Ingestion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#model-training">Model Training</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#model-serving">Model Serving</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_reference.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Feast Python Library</a></li>
+      <li>Next: <a href="api_reference.html" title="next chapter">API Reference</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Feast Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/README.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+    <a href="https://github.com/gojek/feast" class="github">
+        <img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub"  class="github"/>
+    </a>
+    
+
+    
+  </body>
+</html>
