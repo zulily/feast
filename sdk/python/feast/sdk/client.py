@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
-Main interface for users to interact with the Core API. 
-"""
 
 import os
 from datetime import datetime
@@ -23,25 +20,26 @@ import pandas as pd
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from feast.core.CoreService_pb2_grpc import CoreServiceStub
-from feast.core.CoreService_pb2 import CoreServiceTypes
-from feast.core.JobService_pb2 import JobServiceTypes
-from feast.core.JobService_pb2_grpc import JobServiceStub
 from feast.core.DatasetService_pb2 import DatasetServiceTypes
 from feast.core.DatasetService_pb2_grpc import DatasetServiceStub
+from feast.core.JobService_pb2 import JobServiceTypes
+from feast.core.JobService_pb2_grpc import JobServiceStub
 from feast.sdk.env import FEAST_CORE_URL_ENV_KEY, FEAST_SERVING_URL_ENV_KEY
 from feast.sdk.resources.entity import Entity
 from feast.sdk.resources.feature import Feature
 from feast.sdk.resources.feature_group import FeatureGroup
-from feast.sdk.resources.feature_set import DatasetInfo, FileType
-from feast.sdk.resources.storage import Storage
+from feast.sdk.resources.feature_set import DatasetInfo
+from feast.sdk.resources.feature_set import FileType
+from feast.sdk.utils import types
 from feast.sdk.utils.bq_util import TableDownloader
 from feast.sdk.utils.print_utils import spec_to_yaml
-from feast.sdk.utils import types
 from feast.serving.Serving_pb2 import QueryFeaturesRequest
 from feast.serving.Serving_pb2_grpc import ServingAPIStub
 
 
 class Client:
+    """Client for interacting with Feast Core an Serving"""
+
     def __init__(self, core_url=None, serving_url=None, verbose=False):
         """Create an instance of Feast client which is connected to feast
         endpoint specified in the parameter. If no url is provided, the
@@ -75,6 +73,12 @@ class Client:
 
     @property
     def core_url(self):
+        """
+        URL for accessing Feast Core service
+
+        Returns:
+            str: Core URL value
+        """
         if self._core_url is None:
             self._core_url = os.getenv(FEAST_CORE_URL_ENV_KEY)
             if self._core_url is None:
@@ -92,6 +96,12 @@ class Client:
 
     @property
     def serving_url(self):
+        """
+        URL for accessing Feast Serving service
+
+        Returns:
+            str: Serving URL value
+        """
         if self._serving_url is None:
             self._serving_url = os.getenv(FEAST_SERVING_URL_ENV_KEY)
             if self._serving_url is None:
@@ -109,6 +119,12 @@ class Client:
 
     @property
     def verbose(self):
+        """
+        Option (True/False) to make the SDK output more verbose logging
+        
+        Returns:
+            bool: verbosity option for the SDK
+        """
         return self._verbose
 
     @verbose.setter
@@ -118,8 +134,7 @@ class Client:
         self._verbose = val
 
     def apply(self, obj):
-        """Create or update one or many feast's resource
-        (feature, entity, importer, storage).
+        """Create or update one or many feast's resource (feature, entity, importer, storage).
 
         Args:
             obj (object): one or many feast's resource
@@ -138,7 +153,8 @@ class Client:
         self, importer, name_override=None, apply_entity=False, apply_features=False
     ):
         """
-        Run an import job
+        Run an import job given an Importer object
+
         Args:
             importer (feast.sdk.importer.Importer): importer instance
             name_override (str, optional): Job name override
@@ -148,7 +164,7 @@ class Client:
                 features inside importer
 
         Returns:
-            (str) job ID of the import job
+            str: job ID of the import job
         """
         if apply_entity:
             self._apply_entity(importer.entity)
@@ -198,9 +214,9 @@ class Client:
             filters (dict, optional): (default: None) conditional clause
                 that will be used to filter dataset. Keys of filters could be
                 feature id or job_id.
-        :return:
-            feast.resources.feature_set.DatasetInfo: DatasetInfo containing
-            the information of training dataset.
+
+        Returns:
+            feast.resources.feature_set.DatasetInfo: job id of the import job
         """
         self._check_create_dataset_args(
             feature_set, start_date, end_date, limit, filters
@@ -235,7 +251,7 @@ class Client:
             )
         return DatasetInfo(resp.datasetInfo.name, resp.datasetInfo.tableUrl)
 
-    def get_serving_data(self, feature_set, entity_keys, ts_range=None):
+    def get_serving_data(self, feature_set, entity_keys, ts_range=None) -> pd.DataFrame:
         """Get feature value from feast serving API.
 
         If server_url is not provided, the value stored in the environment variable
@@ -274,14 +290,13 @@ class Client:
     ):
         """
         Download training dataset as file
+
         Args:
-            dataset_info (feast.sdk.resources.feature_set.DatasetInfo) :
-                dataset_info to be downloaded
+            dataset_info (feast.sdk.resources.feature_set.DatasetInfo): dataset_info to be downloaded
             dest (str): destination's file path
             staging_location (str, optional): url to staging_location (currently
                 support a folder in GCS)
-            file_type (feast.sdk.resources.feature_set.FileType): (default:
-                FileType.CSV) exported file format
+            file_type (feast.sdk.resources.feature_set.FileType): Exported file format. Defaults to FileType.CSV
         Returns:
             str: path to the downloaded file
         """
@@ -292,13 +307,15 @@ class Client:
     def download_dataset_to_df(self, dataset_info, staging_location=None):
         """
         Download training dataset as Pandas Dataframe
+
         Args:
-            dataset_info (feast.sdk.resources.feature_set.DatasetInfo) :
+            dataset_info (feast.sdk.resources.feature_set.DatasetInfo):
                 dataset_info to be downloaded
             staging_location(str, optional): url to staging_location (currently
                 support a folder in GCS)
 
-        Returns: pandas.DataFrame: dataframe of the training dataset
+        Returns:
+            pandas.DataFrame: dataframe of the training dataset
 
         """
         return self._table_downloader.download_table_as_df(

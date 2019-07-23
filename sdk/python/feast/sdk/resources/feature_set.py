@@ -51,10 +51,11 @@ class FeatureSet:
                 raise ValueError("feature set has different entity: " + e)
 
 
-class FileType(object):
+class FileType:
     """
     File type for downloading training dataset as file
     """
+
     CSV = "CSV"
     """CSV file format"""
 
@@ -66,6 +67,10 @@ class FileType(object):
 
 
 class DatasetInfo:
+    """
+    Contains reference to locate the dataset and retrieve its values
+    """
+
     def __init__(self, name, full_table_id):
         """
             Create instance of DatasetInfo with a BigQuery table as its

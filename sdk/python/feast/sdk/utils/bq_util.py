@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Helper function to interact with BigQuery
+"""
+
 import os
 import tempfile
 import time

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import datetime
 import ntpath
 import tempfile
@@ -33,6 +34,8 @@ from feast.specs.ImportSpec_pb2 import ImportSpec, Schema
 
 
 class Importer:
+    """Importer class helps with the creation of import spec for running ingestion jobs"""
+
     def __init__(self, specs, df, properties):
         self._properties = properties
         self._specs = specs
