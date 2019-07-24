@@ -2,7 +2,7 @@
 
 .. currentmodule:: feast.sdk
 
-Lorem ipsum dolor sit amet, consectetur adipisicing elit. Laudantium suscipit dolorem voluptatibus minus dolorum quia, fugiat quas mollitia, magnam alias ducimus, dolor! Labore sequi, voluptatem. Commodi magnam voluptates exercitationem consectetur.
+<!-- Lorem ipsum dolor sit amet, consectetur adipisicing elit. Laudantium suscipit dolorem voluptatibus minus dolorum quia, fugiat quas mollitia, magnam alias ducimus, dolor! Labore sequi, voluptatem. Commodi magnam voluptates exercitationem consectetur. -->
 
 ## Client
 
