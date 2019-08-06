@@ -37,7 +37,14 @@
             
   <div class="section" id="api-reference">
 <h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this headline">¶</a></h1>
-
+<p>The main concepts with Feast API are:</p>
+<ul class="simple">
+<li><strong>Client</strong> is the interface to Feast. The client methods are used to establish
+connection to Feast in order to register entities, features and to start
+an import job to ingest feature values to Feast.</li>
+<li><strong>Importer</strong> is used to create an import configuration for ingesting feature
+values to Feast.</li>
+</ul>
 <div class="section" id="client">
 <h2>Client<a class="headerlink" href="#client" title="Permalink to this headline">¶</a></h2>
 <table border="1" class="longtable docutils">

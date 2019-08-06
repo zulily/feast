@@ -2,7 +2,12 @@
 
 .. currentmodule:: feast.sdk
 
-Lorem ipsum dolor sit amet, consectetur adipisicing elit. Laudantium suscipit dolorem voluptatibus minus dolorum quia, fugiat quas mollitia, magnam alias ducimus, dolor! Labore sequi, voluptatem. Commodi magnam voluptates exercitationem consectetur.
+The main concepts with Feast API are:
+- **Client** is the interface to Feast. The client methods are used to establish
+  connection to Feast in order to register entities, features and to start
+  an import job to ingest feature values to Feast.
+- **Importer** is used to create an import configuration for ingesting feature
+  values to Feast.
 
 ## Client
 
