@@ -100,4 +100,18 @@ public interface ImportOptions extends PipelineOptions, DataflowPipelineOptions,
   int getWindowSizeInSecForFeatureValueMetric();
 
   void setWindowSizeInSecForFeatureValueMetric(int seconds);
+
+  @Description(
+      "Set the Redis key TTL based on the max age of the FeatureSet that data is being written for.")
+  @Default.Boolean(false)
+  boolean getEnableRedisTTL();
+
+  void setEnableRedisTTL(boolean enabledRedisTTL);
+
+  @Description(
+      "Set the maximum amount of jitter in seconds added to Redis TTL (if TTL is enabled).  Set to 0 to disable jitter.")
+  @Default.Integer(0)
+  int getMaxRedisTTLJitterSeconds();
+
+  void setMaxRedisTTLJitterSeconds(int maxJitterSeconds);
 }

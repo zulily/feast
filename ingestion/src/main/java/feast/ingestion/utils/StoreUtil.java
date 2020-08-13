@@ -79,13 +79,21 @@ public class StoreUtil {
   }
 
   public static FeatureSink getFeatureSink(
-      Store store, Map<String, FeatureSetSpec> featureSetSpecs) {
+      Store store,
+      Map<String, FeatureSetSpec> featureSetSpecs,
+      boolean enableRedisTtl,
+      int maxRedisTtlJitterSeconds) {
     StoreType storeType = store.getType();
     switch (storeType) {
       case REDIS_CLUSTER:
-        return RedisFeatureSink.fromConfig(store.getRedisClusterConfig(), featureSetSpecs);
+        return RedisFeatureSink.fromConfig(
+            store.getRedisClusterConfig(),
+            featureSetSpecs,
+            enableRedisTtl,
+            maxRedisTtlJitterSeconds);
       case REDIS:
-        return RedisFeatureSink.fromConfig(store.getRedisConfig(), featureSetSpecs);
+        return RedisFeatureSink.fromConfig(
+            store.getRedisConfig(), featureSetSpecs, enableRedisTtl, maxRedisTtlJitterSeconds);
       case BIGQUERY:
         return BigQueryFeatureSink.fromConfig(store.getBigqueryConfig(), featureSetSpecs);
       default:

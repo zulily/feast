@@ -111,6 +111,11 @@ public class RedisClusterIngestionClient implements RedisIngestionClient {
   }
 
   @Override
+  public void setex(byte[] key, long seconds, byte[] value) {
+    futures.add(commands.setex(key, seconds, value));
+  }
+
+  @Override
   public void lpush(byte[] key, byte[] value) {
     futures.add(commands.lpush(key, value));
   }

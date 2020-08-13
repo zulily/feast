@@ -104,7 +104,12 @@ public class ImportJob {
                 featureSetSpecsByKey.put(ref, fs.getSpec());
               });
 
-      FeatureSink featureSink = getFeatureSink(store, featureSetSpecsByKey);
+      FeatureSink featureSink =
+          getFeatureSink(
+              store,
+              featureSetSpecsByKey,
+              options.getEnableRedisTTL(),
+              options.getMaxRedisTTLJitterSeconds());
 
       // TODO: make the source part of the job initialisation options
       Source source = subscribedFeatureSets.get(0).getSpec().getSource();

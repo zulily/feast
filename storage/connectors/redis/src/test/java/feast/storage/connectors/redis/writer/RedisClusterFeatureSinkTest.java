@@ -18,7 +18,9 @@ package feast.storage.connectors.redis.writer;
 
 import static feast.storage.common.testing.TestUtil.field;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.number.IsCloseTo.closeTo;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -40,6 +42,7 @@ import io.lettuce.core.codec.ByteArrayCodec;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -113,8 +116,19 @@ public class RedisClusterFeatureSinkTest {
                 FeatureSpec.newBuilder().setName("feature_2").setValueType(Enum.INT64).build())
             .build();
 
+    FeatureSetSpec spec3 =
+        FeatureSetSpec.newBuilder()
+            .setName("fs_maxage")
+            .setProject("myproject")
+            .addEntities(EntitySpec.newBuilder().setName("entity").setValueType(Enum.INT64).build())
+            .addFeatures(
+                FeatureSpec.newBuilder().setName("feature").setValueType(Enum.STRING).build())
+            .setMaxAge(com.google.protobuf.Duration.newBuilder().setSeconds(60))
+            .build();
+
     Map<String, FeatureSetSpec> specMap =
-        ImmutableMap.of("myproject/fs", spec1, "myproject/feature_set", spec2);
+        ImmutableMap.of(
+            "myproject/fs", spec1, "myproject/feature_set", spec2, "myproject/fs_maxage", spec3);
     RedisClusterConfig redisClusterConfig =
         RedisClusterConfig.newBuilder()
             .setConnectionString(CONNECTION_STRING)
@@ -499,5 +513,296 @@ public class RedisClusterFeatureSinkTest {
 
     byte[] actual = redisClusterCommands.get(expectedKey.toByteArray());
     assertThat(actual, equalTo(expectedValue.toByteArray()));
+  }
+
+  @Test
+  public void shouldSetRedisTTLToNegativeOneIfNotEnabled() {
+    final ZonedDateTime now = ZonedDateTime.now();
+    long expectedTTL = -1;
+    RedisCustomIO.Write.WriteDoFn.currentTime = () -> now;
+
+    HashMap<RedisKey, FeatureRow> kvs = new LinkedHashMap<>();
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs_maxage")
+            .addEntities(field("entity", 1, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("one")))
+            .build());
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs_maxage")
+            .addEntities(field("entity", 2, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("two")))
+            .build());
+
+    List<FeatureRow> featureRows =
+        ImmutableList.of(
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs_maxage")
+                .addFields(field("entity", 1, Enum.INT64))
+                .addFields(field("feature", "one", Enum.STRING))
+                .build(),
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs_maxage")
+                .addFields(field("entity", 2, Enum.INT64))
+                .addFields(field("feature", "two", Enum.STRING))
+                .build());
+
+    p.apply(Create.of(featureRows)).apply(redisClusterFeatureSink.writer());
+    p.run();
+
+    kvs.forEach(
+        (key, value) -> {
+          long actual = redisClusterCommands.ttl(key.toByteArray());
+          assertThat(actual, equalTo(expectedTTL));
+        });
+  }
+
+  @Test
+  public void shouldSetRedisTTL() {
+    RedisClusterConfig redisClusterConfig =
+        RedisClusterConfig.newBuilder()
+            .mergeFrom(redisClusterFeatureSink.getRedisClusterConfig())
+            .build();
+    redisClusterFeatureSink =
+        redisClusterFeatureSink
+            .toBuilder()
+            .setRedisClusterConfig(redisClusterConfig)
+            .setEnableRedisTtl(true)
+            .build();
+    final ZonedDateTime now = ZonedDateTime.now();
+    ZonedDateTime eventTimestamp = now;
+    RedisCustomIO.Write.WriteDoFn.currentTime = () -> now;
+
+    HashMap<RedisKey, FeatureRow> kvs = new LinkedHashMap<>();
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs_maxage")
+            .addEntities(field("entity", 1, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("one")))
+            .build());
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs_maxage")
+            .addEntities(field("entity", 2, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("two")))
+            .build());
+
+    List<FeatureRow> featureRows =
+        ImmutableList.of(
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs_maxage")
+                .setEventTimestamp(
+                    Timestamp.newBuilder().setSeconds(eventTimestamp.toInstant().getEpochSecond()))
+                .addFields(field("entity", 1, Enum.INT64))
+                .addFields(field("feature", "one", Enum.STRING))
+                .build(),
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs_maxage")
+                .setEventTimestamp(
+                    Timestamp.newBuilder().setSeconds(eventTimestamp.toInstant().getEpochSecond()))
+                .addFields(field("entity", 2, Enum.INT64))
+                .addFields(field("feature", "two", Enum.STRING))
+                .build());
+
+    FeatureSetSpec spec = redisClusterFeatureSink.getFeatureSetSpecs().get("myproject/fs_maxage");
+    long expectedTTL = spec.getMaxAge().getSeconds();
+    p.apply(Create.of(featureRows)).apply(redisClusterFeatureSink.writer());
+    p.run();
+
+    kvs.forEach(
+        (key, value) -> {
+          double actual = redisClusterCommands.ttl(key.toByteArray());
+          assertThat(actual, is(closeTo(expectedTTL, 5)));
+        });
+  }
+
+  @Test
+  public void shouldAccountForEventTimestampInRedisTTL() {
+    RedisClusterConfig redisClusterConfig =
+        RedisClusterConfig.newBuilder()
+            .mergeFrom(redisClusterFeatureSink.getRedisClusterConfig())
+            .build();
+    redisClusterFeatureSink =
+        redisClusterFeatureSink
+            .toBuilder()
+            .setRedisClusterConfig(redisClusterConfig)
+            .setEnableRedisTtl(true)
+            .build();
+    final ZonedDateTime now = ZonedDateTime.now();
+    ZonedDateTime eventTimestamp = now.minusSeconds(10);
+    RedisCustomIO.Write.WriteDoFn.currentTime = () -> now;
+
+    HashMap<RedisKey, FeatureRow> kvs = new LinkedHashMap<>();
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs_maxage")
+            .addEntities(field("entity", 1, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("one")))
+            .build());
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs_maxage")
+            .addEntities(field("entity", 2, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("two")))
+            .build());
+
+    List<FeatureRow> featureRows =
+        ImmutableList.of(
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs_maxage")
+                .setEventTimestamp(
+                    Timestamp.newBuilder().setSeconds(eventTimestamp.toInstant().getEpochSecond()))
+                .addFields(field("entity", 1, Enum.INT64))
+                .addFields(field("feature", "one", Enum.STRING))
+                .build(),
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs_maxage")
+                .setEventTimestamp(
+                    Timestamp.newBuilder().setSeconds(eventTimestamp.toInstant().getEpochSecond()))
+                .addFields(field("entity", 2, Enum.INT64))
+                .addFields(field("feature", "two", Enum.STRING))
+                .build());
+
+    FeatureSetSpec spec = redisClusterFeatureSink.getFeatureSetSpecs().get("myproject/fs_maxage");
+    long expectedTTL = spec.getMaxAge().getSeconds() - 10;
+    p.apply(Create.of(featureRows)).apply(redisClusterFeatureSink.writer());
+    p.run();
+
+    kvs.forEach(
+        (key, value) -> {
+          double actual = redisClusterCommands.ttl(key.toByteArray());
+          assertThat(actual, is(closeTo(expectedTTL, 5)));
+        });
+  }
+
+  @Test
+  public void shouldAddJitterToRedisTTL() {
+    int jitter = 10;
+    long seed = 1729;
+    int expectedJitter = 5;
+    RedisCustomIO.setRandomSeed(seed);
+    RedisClusterConfig redisClusterConfig =
+        RedisClusterConfig.newBuilder()
+            .mergeFrom(redisClusterFeatureSink.getRedisClusterConfig())
+            .build();
+    redisClusterFeatureSink =
+        redisClusterFeatureSink
+            .toBuilder()
+            .setRedisClusterConfig(redisClusterConfig)
+            .setEnableRedisTtl(true)
+            .setMaxRedisTtlJitterSeconds(jitter)
+            .build();
+    final ZonedDateTime now = ZonedDateTime.now();
+    ZonedDateTime eventTimestamp = now;
+    RedisCustomIO.Write.WriteDoFn.currentTime = () -> now;
+
+    HashMap<RedisKey, FeatureRow> kvs = new LinkedHashMap<>();
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs_maxage")
+            .addEntities(field("entity", 1, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("one")))
+            .build());
+
+    List<FeatureRow> featureRows =
+        ImmutableList.of(
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs_maxage")
+                .setEventTimestamp(
+                    Timestamp.newBuilder().setSeconds(eventTimestamp.toInstant().getEpochSecond()))
+                .addFields(field("entity", 1, Enum.INT64))
+                .addFields(field("feature", "one", Enum.STRING))
+                .build());
+
+    FeatureSetSpec spec = redisClusterFeatureSink.getFeatureSetSpecs().get("myproject/fs_maxage");
+    double expectedTTL = spec.getMaxAge().getSeconds() + expectedJitter;
+    p.apply(Create.of(featureRows)).apply(redisClusterFeatureSink.writer());
+    p.run();
+
+    kvs.forEach(
+        (key, value) -> {
+          double actual = redisClusterCommands.ttl(key.toByteArray());
+          assertThat(actual, equalTo(expectedTTL));
+        });
+  }
+
+  @Test
+  public void shouldSetRedisTTLToNegativeOneIfNoMaxAge() {
+    RedisClusterConfig redisClusterConfig =
+        RedisClusterConfig.newBuilder()
+            .mergeFrom(redisClusterFeatureSink.getRedisClusterConfig())
+            .build();
+    redisClusterFeatureSink =
+        redisClusterFeatureSink
+            .toBuilder()
+            .setRedisClusterConfig(redisClusterConfig)
+            .setEnableRedisTtl(true)
+            .build();
+    final ZonedDateTime now = ZonedDateTime.now();
+    long expectedTTL = -1;
+    RedisCustomIO.Write.WriteDoFn.currentTime = () -> now;
+    HashMap<RedisKey, FeatureRow> kvs = new LinkedHashMap<>();
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs")
+            .addEntities(field("entity", 1, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("one")))
+            .build());
+    kvs.put(
+        RedisKey.newBuilder()
+            .setFeatureSet("myproject/fs")
+            .addEntities(field("entity", 2, Enum.INT64))
+            .build(),
+        FeatureRow.newBuilder()
+            .setEventTimestamp(Timestamp.getDefaultInstance())
+            .addFields(Field.newBuilder().setValue(Value.newBuilder().setStringVal("two")))
+            .build());
+
+    List<FeatureRow> featureRows =
+        ImmutableList.of(
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs")
+                .addFields(field("entity", 1, Enum.INT64))
+                .addFields(field("feature", "one", Enum.STRING))
+                .build(),
+            FeatureRow.newBuilder()
+                .setFeatureSet("myproject/fs")
+                .addFields(field("entity", 2, Enum.INT64))
+                .addFields(field("feature", "two", Enum.STRING))
+                .build());
+
+    p.apply(Create.of(featureRows)).apply(redisClusterFeatureSink.writer());
+    p.run();
+
+    kvs.forEach(
+        (key, value) -> {
+          long actual = redisClusterCommands.ttl(key.toByteArray());
+          assertThat(actual, equalTo(expectedTTL));
+        });
   }
 }

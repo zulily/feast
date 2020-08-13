@@ -32,13 +32,19 @@ public class DirectRunnerConfigTest {
         DirectRunnerConfigOptions.newBuilder()
             .setTargetParallelism(1)
             .setDeadLetterTableSpec("project_id:dataset_id.table_id")
+            .setEnableRedisTTL(false)
+            .setMaxRedisTTLJitterSeconds(0)
             .build();
     DirectRunnerConfig directRunnerConfig = new DirectRunnerConfig(opts);
     List<String> args = Lists.newArrayList(directRunnerConfig.toArgs());
-    assertThat(args.size(), equalTo(2));
-    assertThat(
-        args,
-        containsInAnyOrder(
-            "--targetParallelism=1", "--deadletterTableSpec=project_id:dataset_id.table_id"));
+    String[] expectedArgs =
+        new String[] {
+          "--targetParallelism=1",
+          "--deadletterTableSpec=project_id:dataset_id.table_id",
+          "--enableRedisTTL=false",
+          "--maxRedisTTLJitterSeconds=0"
+        };
+    assertThat(args.size(), equalTo(expectedArgs.length));
+    assertThat(args, containsInAnyOrder(expectedArgs));
   }
 }

@@ -43,6 +43,8 @@ public class DataflowRunnerConfig extends RunnerConfig {
     this.maxNumWorkers = runnerConfigOptions.getMaxNumWorkers();
     this.deadLetterTableSpec = runnerConfigOptions.getDeadLetterTableSpec();
     this.labels = runnerConfigOptions.getLabelsMap();
+    this.enableRedisTTL = runnerConfigOptions.getEnableRedisTTL();
+    this.maxRedisTTLJitterSeconds = runnerConfigOptions.getMaxRedisTTLJitterSeconds();
     validate();
   }
 
@@ -86,6 +88,12 @@ public class DataflowRunnerConfig extends RunnerConfig {
   public String deadLetterTableSpec;
 
   public Map<String, String> labels;
+
+  /* Set the Redis key TTL based on the max age of the FeatureSet that data is being written for. */
+  public boolean enableRedisTTL = false;
+
+  /* Set the maximum amount of jitter in seconds added to Redis TTL (if TTL is enabled).  Set to 0 to disable jitter. */
+  public int maxRedisTTLJitterSeconds = 0;
 
   /** Validates Dataflow runner configuration options */
   public void validate() {

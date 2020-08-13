@@ -42,6 +42,8 @@ public class DataflowRunnerConfigTest {
             .setUsePublicIps(false)
             .setWorkerMachineType("n1-standard-1")
             .setDeadLetterTableSpec("project_id:dataset_id.table_id")
+            .setEnableRedisTTL(false)
+            .setMaxRedisTTLJitterSeconds(0)
             .putLabels("key", "value")
             .build();
 
@@ -60,6 +62,8 @@ public class DataflowRunnerConfigTest {
                 "--usePublicIps=false",
                 "--workerMachineType=n1-standard-1",
                 "--deadLetterTableSpec=project_id:dataset_id.table_id",
+                "--enableRedisTTL=false",
+                "--maxRedisTTLJitterSeconds=0",
                 "--labels={\"key\":\"value\"}")
             .toArray(String[]::new);
     assertThat(args.size(), equalTo(expectedArgs.length));

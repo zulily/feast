@@ -31,6 +31,12 @@ message DirectRunnerConfigOptions {
 
     /* BigQuery table specification, e.g. PROJECT_ID:DATASET_ID.PROJECT_ID */
     string deadLetterTableSpec = 2;
+
+    /* Set the Redis key TTL based on the max age of the FeatureSet that data is being written for. */
+    bool enableRedisTTL = 3;
+
+    /* Set the maximum amount of jitter in seconds added to Redis TTL (if TTL is enabled).  Set to 0 to disable jitter. */
+    int32 maxRedisTTLJitterSeconds = 4;
 }
 
 message DataflowRunnerConfigOptions {
@@ -73,4 +79,10 @@ message DataflowRunnerConfigOptions {
 
     /* Labels to apply to the dataflow job */
     map<string, string> labels = 13;
+
+    /* Set the Redis key TTL based on the max age of the FeatureSet that data is being written for. */
+    bool enableRedisTTL = 14;
+
+    /* Set the maximum amount of jitter in seconds added to Redis TTL (if TTL is enabled).  Set to 0 to disable jitter. */
+    int32 maxRedisTTLJitterSeconds = 15;
 }

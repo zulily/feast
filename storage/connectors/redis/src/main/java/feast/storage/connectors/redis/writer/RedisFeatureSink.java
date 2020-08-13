@@ -44,13 +44,29 @@ public abstract class RedisFeatureSink implements FeatureSink {
    * @return {@link RedisFeatureSink.Builder}
    */
   public static FeatureSink fromConfig(
-      RedisConfig redisConfig, Map<String, FeatureSetSpec> featureSetSpecs) {
-    return builder().setFeatureSetSpecs(featureSetSpecs).setRedisConfig(redisConfig).build();
+      RedisConfig redisConfig,
+      Map<String, FeatureSetSpec> featureSetSpecs,
+      boolean enableRedisTtl,
+      int maxRedisTtlJitterSeconds) {
+    return builder()
+        .setFeatureSetSpecs(featureSetSpecs)
+        .setRedisConfig(redisConfig)
+        .setEnableRedisTtl(enableRedisTtl)
+        .setMaxRedisTtlJitterSeconds(maxRedisTtlJitterSeconds)
+        .build();
   }
 
   public static FeatureSink fromConfig(
-      RedisClusterConfig redisConfig, Map<String, FeatureSetSpec> featureSetSpecs) {
-    return builder().setFeatureSetSpecs(featureSetSpecs).setRedisClusterConfig(redisConfig).build();
+      RedisClusterConfig redisConfig,
+      Map<String, FeatureSetSpec> featureSetSpecs,
+      boolean enableRedisTtl,
+      int maxRedisTtlJitterSeconds) {
+    return builder()
+        .setFeatureSetSpecs(featureSetSpecs)
+        .setRedisClusterConfig(redisConfig)
+        .setEnableRedisTtl(enableRedisTtl)
+        .setMaxRedisTtlJitterSeconds(maxRedisTtlJitterSeconds)
+        .build();
   }
 
   @Nullable
@@ -61,10 +77,16 @@ public abstract class RedisFeatureSink implements FeatureSink {
 
   public abstract Map<String, FeatureSetSpec> getFeatureSetSpecs();
 
+  public abstract boolean getEnableRedisTtl();
+
+  public abstract int getMaxRedisTtlJitterSeconds();
+
   public abstract Builder toBuilder();
 
   public static Builder builder() {
-    return new AutoValue_RedisFeatureSink.Builder();
+    return new AutoValue_RedisFeatureSink.Builder()
+        .setEnableRedisTtl(false)
+        .setMaxRedisTtlJitterSeconds(0);
   }
 
   @AutoValue.Builder
@@ -74,6 +96,10 @@ public abstract class RedisFeatureSink implements FeatureSink {
     public abstract Builder setRedisClusterConfig(RedisClusterConfig redisConfig);
 
     public abstract Builder setFeatureSetSpecs(Map<String, FeatureSetSpec> featureSetSpecs);
+
+    public abstract Builder setEnableRedisTtl(boolean enableRedisTtl);
+
+    public abstract Builder setMaxRedisTtlJitterSeconds(int maxRedisTtlJitterSeconds);
 
     public abstract RedisFeatureSink build();
   }
@@ -103,10 +129,16 @@ public abstract class RedisFeatureSink implements FeatureSink {
   public PTransform<PCollection<FeatureRow>, WriteResult> writer() {
     if (getRedisClusterConfig() != null) {
       return new RedisCustomIO.Write(
-          new RedisClusterIngestionClient(getRedisClusterConfig()), getFeatureSetSpecs());
+          new RedisClusterIngestionClient(getRedisClusterConfig()),
+          getFeatureSetSpecs(),
+          getEnableRedisTtl(),
+          getMaxRedisTtlJitterSeconds());
     } else if (getRedisConfig() != null) {
       return new RedisCustomIO.Write(
-          new RedisStandaloneIngestionClient(getRedisConfig()), getFeatureSetSpecs());
+          new RedisStandaloneIngestionClient(getRedisConfig()),
+          getFeatureSetSpecs(),
+          getEnableRedisTtl(),
+          getMaxRedisTtlJitterSeconds());
     } else {
       throw new RuntimeException(
           "At least one RedisConfig or RedisClusterConfig must be provided to Redis Sink");

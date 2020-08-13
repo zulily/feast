@@ -29,8 +29,16 @@ public class DirectRunnerConfig extends RunnerConfig {
   /* BigQuery table specification, e.g. PROJECT_ID:DATASET_ID.PROJECT_ID */
   public String deadletterTableSpec;
 
+  /* Set the Redis key TTL based on the max age of the FeatureSet that data is being written for. */
+  public boolean enableRedisTTL = false;
+
+  /* Set the maximum amount of jitter in seconds added to Redis TTL (if TTL is enabled).  Set to 0 to disable jitter. */
+  public int maxRedisTTLJitterSeconds = 0;
+
   public DirectRunnerConfig(DirectRunnerConfigOptions runnerConfigOptions) {
     this.deadletterTableSpec = runnerConfigOptions.getDeadLetterTableSpec();
     this.targetParallelism = runnerConfigOptions.getTargetParallelism();
+    this.enableRedisTTL = runnerConfigOptions.getEnableRedisTTL();
+    this.maxRedisTTLJitterSeconds = runnerConfigOptions.getMaxRedisTTLJitterSeconds();
   }
 }

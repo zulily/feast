@@ -16,6 +16,7 @@
  */
 package feast.storage.connectors.redis.writer;
 
+import com.google.protobuf.Duration;
 import feast.proto.core.FeatureSetProto.EntitySpec;
 import feast.proto.core.FeatureSetProto.FeatureSetSpec;
 import feast.proto.core.FeatureSetProto.FeatureSpec;
@@ -30,11 +31,14 @@ import feast.storage.api.writer.WriteResult;
 import feast.storage.common.retry.Retriable;
 import io.lettuce.core.RedisException;
 import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.PTransform;
@@ -53,6 +57,7 @@ public class RedisCustomIO {
 
   private static final int DEFAULT_BATCH_SIZE = 1000;
   private static final int DEFAULT_TIMEOUT = 2000;
+  private static final Random rand = new Random();
 
   private static TupleTag<FeatureRow> successfulInsertsTag =
       new TupleTag<FeatureRow>("successfulInserts") {};
@@ -64,8 +69,17 @@ public class RedisCustomIO {
   private RedisCustomIO() {}
 
   public static Write write(
-      RedisIngestionClient redisIngestionClient, Map<String, FeatureSetSpec> featureSetSpecs) {
-    return new Write(redisIngestionClient, featureSetSpecs);
+      RedisIngestionClient redisIngestionClient,
+      Map<String, FeatureSetSpec> featureSetSpecs,
+      boolean enableRedisTtl,
+      int maxRedisTtlJitterSeconds) {
+    return new Write(
+        redisIngestionClient, featureSetSpecs, enableRedisTtl, maxRedisTtlJitterSeconds);
+  }
+
+  // For unit testing the redis TTL jitter.
+  static void setRandomSeed(long seed) {
+    rand.setSeed(seed);
   }
 
   /** ServingStoreWrite data to a Redis server. */
@@ -75,11 +89,18 @@ public class RedisCustomIO {
     private RedisIngestionClient redisIngestionClient;
     private int batchSize;
     private int timeout;
+    private final boolean enableRedisTtl;
+    private final int maxRedisTtlJitterSeconds;
 
     public Write(
-        RedisIngestionClient redisIngestionClient, Map<String, FeatureSetSpec> featureSetSpecs) {
+        RedisIngestionClient redisIngestionClient,
+        Map<String, FeatureSetSpec> featureSetSpecs,
+        boolean enableRedisTtl,
+        int maxRedisTtlJitterSeconds) {
       this.redisIngestionClient = redisIngestionClient;
       this.featureSetSpecs = featureSetSpecs;
+      this.enableRedisTtl = enableRedisTtl;
+      this.maxRedisTtlJitterSeconds = maxRedisTtlJitterSeconds;
     }
 
     public Write withBatchSize(int batchSize) {
@@ -96,7 +117,12 @@ public class RedisCustomIO {
     public WriteResult expand(PCollection<FeatureRow> input) {
       PCollectionTuple redisWrite =
           input.apply(
-              ParDo.of(new WriteDoFn(redisIngestionClient, featureSetSpecs))
+              ParDo.of(
+                      new WriteDoFn(
+                          redisIngestionClient,
+                          featureSetSpecs,
+                          enableRedisTtl,
+                          maxRedisTtlJitterSeconds))
                   .withOutputTags(successfulInsertsTag, TupleTagList.of(failedInsertsTupleTag)));
       return WriteResult.in(
           input.getPipeline(),
@@ -107,16 +133,27 @@ public class RedisCustomIO {
     public static class WriteDoFn extends DoFn<FeatureRow, FeatureRow> {
 
       private final List<FeatureRow> featureRows = new ArrayList<>();
+      private final List<FeatureRow> skippedFeatureRows = new ArrayList<>();
       private Map<String, FeatureSetSpec> featureSetSpecs;
       private int batchSize = DEFAULT_BATCH_SIZE;
       private int timeout = DEFAULT_TIMEOUT;
       private RedisIngestionClient redisIngestionClient;
+      private final boolean enableRedisTtl;
+      private final int maxRedisTtlJitterSeconds;
+
+      // Used by unit tests to avoid race condition
+      static Supplier<ZonedDateTime> currentTime = ZonedDateTime::now;
 
       WriteDoFn(
-          RedisIngestionClient redisIngestionClient, Map<String, FeatureSetSpec> featureSetSpecs) {
+          RedisIngestionClient redisIngestionClient,
+          Map<String, FeatureSetSpec> featureSetSpecs,
+          boolean enableRedisTtl,
+          int maxRedisTtlJitterSeconds) {
 
         this.redisIngestionClient = redisIngestionClient;
         this.featureSetSpecs = featureSetSpecs;
+        this.enableRedisTtl = enableRedisTtl;
+        this.maxRedisTtlJitterSeconds = maxRedisTtlJitterSeconds;
       }
 
       public WriteDoFn withBatchSize(int batchSize) {
@@ -160,7 +197,16 @@ public class RedisCustomIO {
                     }
                     featureRows.forEach(
                         row -> {
-                          redisIngestionClient.set(getKey(row), getValue(row));
+                          if (!setFeatureRow(
+                              row,
+                              redisIngestionClient,
+                              featureSetSpecs.get(row.getFeatureSet()),
+                              enableRedisTtl,
+                              maxRedisTtlJitterSeconds,
+                              getKey(row),
+                              getValue(row))) {
+                            skippedFeatureRows.add(row);
+                          }
                         });
                     redisIngestionClient.sync();
                   }
@@ -175,6 +221,59 @@ public class RedisCustomIO {
                 });
       }
 
+      // Calculate the TTL if necessary and write to redis.
+      // Return true if the row was written and false otherwise.
+      private static boolean setFeatureRow(
+          FeatureRow row,
+          RedisIngestionClient redisIngestionClient,
+          FeatureSetSpec spec,
+          boolean enableRedisTtl,
+          int maxRedisTtlJitterSeconds,
+          byte[] key,
+          byte[] value) {
+        long ttlSeconds = 0;
+        boolean writeToRedis = true;
+        if (enableRedisTtl && spec != null) {
+          final Duration maxAge = spec.getMaxAge();
+
+          // If maxAge isn't set don't apply TTL
+          if (!maxAge.equals(Duration.getDefaultInstance())) {
+            ttlSeconds = maxAge.getSeconds();
+
+            // Adjust initial TTL based on event timestamp of FeatureRow
+            ttlSeconds -=
+                currentTime.get().toInstant().getEpochSecond()
+                    - row.getEventTimestamp().getSeconds();
+
+            // The consideration to write data to Redis or not should NOT take jitter into account
+            if (ttlSeconds <= 0) {
+              writeToRedis = false;
+            } else {
+              if (maxRedisTtlJitterSeconds > 0) {
+                ttlSeconds += rand.nextInt(maxRedisTtlJitterSeconds);
+              }
+            }
+          } else {
+            // Log an error instead of throwing an exception since setting a TTL is an
+            // optimization
+            // for storage space usage.
+            // Ensuring data is in Redis for serving even with no TTL is more important??
+            log.error("Unable to find FeatureSet to set Redis TTL  featureSet={}", spec.getName());
+          }
+        }
+        if (writeToRedis) {
+          if (ttlSeconds > 0) {
+            redisIngestionClient.setex(key, ttlSeconds, value);
+          } else {
+            redisIngestionClient.set(key, value);
+          }
+        } else {
+          log.info("Not writing FeatureRow to Redis  key={}", key);
+          return false;
+        }
+        return true;
+      }
+
       private FailedElement toFailedElement(
           FeatureRow featureRow, Exception exception, String jobName) {
         return FailedElement.newBuilder()
@@ -183,6 +282,16 @@ public class RedisCustomIO {
             .setPayload(featureRow.toString())
             .setErrorMessage(exception.getMessage())
             .setStackTrace(ExceptionUtils.getStackTrace(exception))
+            .build();
+      }
+
+      private FailedElement processSkippedFeatureRow(FeatureRow featureRow, String jobName) {
+        return FailedElement.newBuilder()
+            .setJobName(jobName)
+            .setJobName(jobName)
+            .setTransformName("RedisCustomIO")
+            .setPayload(featureRow.toString())
+            .setErrorMessage("featurerow_to_redis_skipped")
             .build();
       }
 
@@ -251,6 +360,9 @@ public class RedisCustomIO {
             executeBatch();
             featureRows.forEach(row -> context.output(successfulInsertsTag, row));
             featureRows.clear();
+            skippedFeatureRows.forEach(
+                row -> processSkippedFeatureRow(row, context.getPipelineOptions().getJobName()));
+            skippedFeatureRows.clear();
           } catch (Exception e) {
             featureRows.forEach(
                 failedMutation -> {
@@ -274,6 +386,9 @@ public class RedisCustomIO {
                     context.output(
                         successfulInsertsTag, row, Instant.now(), GlobalWindow.INSTANCE));
             featureRows.clear();
+            skippedFeatureRows.forEach(
+                row -> processSkippedFeatureRow(row, context.getPipelineOptions().getJobName()));
+            skippedFeatureRows.clear();
           } catch (Exception e) {
             featureRows.forEach(
                 failedMutation -> {
